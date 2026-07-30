@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/golang-migrate/migrate/v4"
-	// registers the "postgres" database driver with golang-migrate
+
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 
@@ -13,12 +13,6 @@ import (
 	"github.com/bambam/hospital-middleware/migrations"
 )
 
-// Migrate applies all pending migrations from the embedded SQL files.
-//
-// Running migrations from the API process (rather than a separate job) keeps
-// docker-compose to three services as the assignment requires. golang-migrate
-// takes a Postgres advisory lock for the duration, so several API replicas
-// starting at once still apply each migration exactly once.
 func Migrate(cfg config.DBConfig) error {
 	m, closeMigrator, err := newMigrator(cfg)
 	if err != nil {
@@ -32,12 +26,6 @@ func Migrate(cfg config.DBConfig) error {
 	return nil
 }
 
-// Rollback reverses every applied migration. It exists so that the .down.sql
-// files are executable rather than decorative — CI runs up/down/up, which is
-// the only check that a down migration is valid Postgres at all.
-//
-// It is deliberately not reachable from the API process: rolling a schema back
-// is an operator action, never a side effect of a restart.
 func Rollback(cfg config.DBConfig) error {
 	m, closeMigrator, err := newMigrator(cfg)
 	if err != nil {
@@ -62,7 +50,5 @@ func newMigrator(cfg config.DBConfig) (*migrate.Migrate, func(), error) {
 		return nil, nil, fmt.Errorf("init migrator: %w", err)
 	}
 
-	// Close reports both a source and a database error; neither is actionable
-	// once the migration itself has already succeeded or failed.
 	return m, func() { _, _ = m.Close() }, nil
 }

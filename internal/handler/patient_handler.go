@@ -13,7 +13,6 @@ import (
 	"github.com/bambam/hospital-middleware/internal/service"
 )
 
-// PatientHandler serves POST /patient/search.
 type PatientHandler struct {
 	patients *service.PatientService
 	logger   *slog.Logger
@@ -23,11 +22,6 @@ func NewPatientHandler(patients *service.PatientService, logger *slog.Logger) *P
 	return &PatientHandler{patients: patients, logger: logger}
 }
 
-// searchPatientRequest holds the optional filters. Every field is a pointer so
-// an omitted field ("not filtering on this") is distinguishable from an empty
-// string ("match the empty value").
-//
-// There is deliberately no hospital field: the scope comes from the JWT.
 type searchPatientRequest struct {
 	NationalID  *string `json:"national_id"`
 	PassportID  *string `json:"passport_id"`
@@ -39,8 +33,6 @@ type searchPatientRequest struct {
 	Email       *string `json:"email"`
 }
 
-// patientResponse is the client-facing patient shape. It mirrors the HIS field
-// names the assignment specifies, and omits our internal ids and timestamps.
 type patientResponse struct {
 	PatientHN    string  `json:"patient_hn"`
 	NationalID   *string `json:"national_id"`
@@ -62,12 +54,9 @@ type searchPatientResponse struct {
 	Count   int               `json:"count"`
 }
 
-// Search handles POST /patient/search. It requires a valid token; the hospital
-// scope is read from the verified claims, never from the request body.
 func (h *PatientHandler) Search(c *gin.Context) {
 	claims, ok := middleware.ClaimsFrom(c)
 	if !ok {
-		// Only reachable if the route were mounted without RequireAuth.
 		respondError(c, h.logger, apierr.Unauthorized("a valid bearer token is required"))
 		return
 	}
@@ -119,9 +108,6 @@ func (r searchPatientRequest) toCriteria() (models.PatientSearchCriteria, error)
 	return criteria, nil
 }
 
-// trimmed normalizes an optional filter: a field that is present but blank is
-// treated as absent, so `{"first_name": ""}` does not become a filter matching
-// every patient.
 func trimmed(value *string) *string {
 	if value == nil {
 		return nil

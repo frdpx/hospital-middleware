@@ -57,18 +57,15 @@ func TestTokenManager_Parse_Rejections(t *testing.T) {
 	manager := auth.NewTokenManager(cfg)
 	staff := testStaff()
 
-	// A token that was valid two hours ago and has since expired.
 	pastManager := manager.WithClock(func() time.Time { return time.Now().Add(-2 * time.Hour) })
 	expiredToken, _, err := pastManager.Generate(staff)
 	require.NoError(t, err)
 
-	// A token signed with a key we do not trust.
 	forgedCfg := cfg
 	forgedCfg.Secret = "a-completely-different-secret-key-32"
 	forgedToken, _, err := auth.NewTokenManager(forgedCfg).Generate(staff)
 	require.NoError(t, err)
 
-	// A token from a different issuer.
 	otherIssuerCfg := cfg
 	otherIssuerCfg.Issuer = "some-other-service"
 	otherIssuerToken, _, err := auth.NewTokenManager(otherIssuerCfg).Generate(staff)
@@ -101,8 +98,6 @@ func TestTokenManager_Parse_Rejections(t *testing.T) {
 	}
 }
 
-// unsignedToken forges an "alg: none" token — the classic JWT bypass. It must
-// be rejected because Parse pins the accepted algorithm to HS256.
 func unsignedToken(t *testing.T, staff *models.Staff) string {
 	t.Helper()
 
@@ -120,8 +115,6 @@ func unsignedToken(t *testing.T, staff *models.Staff) string {
 	return token
 }
 
-// tokenWithoutHospital is correctly signed but carries no scope, so it must
-// not be usable to search any hospital's patients.
 func tokenWithoutHospital(t *testing.T, staff *models.Staff) string {
 	t.Helper()
 
@@ -153,8 +146,6 @@ func tokenWithSubject(t *testing.T, subject string) string {
 	return token
 }
 
-// Two staff members at different hospitals must never receive interchangeable
-// tokens, even when their usernames are identical.
 func TestTokenManager_ScopesTokensPerHospital(t *testing.T) {
 	t.Parallel()
 

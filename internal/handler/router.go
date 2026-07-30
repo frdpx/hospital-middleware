@@ -11,22 +11,17 @@ import (
 	"github.com/bambam/hospital-middleware/internal/middleware"
 )
 
-// RouterDeps is everything the HTTP layer needs. Passing one struct keeps
-// wiring in main.go readable and makes the router trivially constructible in
-// tests with fakes.
 type RouterDeps struct {
 	Staff    *StaffHandler
 	Patients *PatientHandler
 	Tokens   *auth.TokenManager
 	Logger   *slog.Logger
-	// Ping reports whether dependencies (the database) are reachable. Used by
-	// the readiness probe that docker-compose and nginx rely on.
+
 	Ping func(ctx context.Context) error
-	// Debug switches gin into development mode.
+
 	Debug bool
 }
 
-// NewRouter builds the Gin engine with all routes and middleware.
 func NewRouter(deps RouterDeps) *gin.Engine {
 	useJSONFieldNames()
 
@@ -37,8 +32,7 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	}
 
 	router := gin.New()
-	// Without this, gin answers a wrong-method request with 404, which reads
-	// as "no such endpoint" and sends clients hunting for a typo in the path.
+
 	router.HandleMethodNotAllowed = true
 	router.Use(
 		middleware.RequestID(),
@@ -46,9 +40,6 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 		middleware.AccessLog(deps.Logger),
 	)
 
-	// Trust no proxy headers by default. Nginx sits in front of this service,
-	// but blanket-trusting X-Forwarded-For would let a client spoof its own
-	// address in our logs.
 	_ = router.SetTrustedProxies(nil)
 
 	router.GET("/healthz", healthz)
@@ -56,7 +47,6 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 
 	staff := router.Group("/staff")
 	{
-		// Left unauthenticated per the assignment's spec. See docs/adr/0003.
 		staff.POST("/create", deps.Staff.Create)
 		staff.POST("/login", deps.Staff.Login)
 	}
@@ -81,13 +71,10 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	return router
 }
 
-// healthz is a liveness probe: it answers as long as the process is running.
 func healthz(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-// readyz is a readiness probe: it fails while the database is unreachable, so
-// a restarting stack does not receive traffic before it can serve it.
 func readyz(ping func(ctx context.Context) error, logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if ping == nil {

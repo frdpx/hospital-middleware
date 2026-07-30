@@ -1,6 +1,3 @@
-// Package config loads all runtime configuration from environment variables
-// (12-factor), so the same binary runs locally, in docker-compose and in CI
-// with nothing but env differences.
 package config
 
 import (
@@ -27,8 +24,6 @@ type AppConfig struct {
 	LogLevel string
 }
 
-// IsProduction reports whether extra safety checks (e.g. rejecting the sample
-// JWT secret) should apply.
 func (a AppConfig) IsProduction() bool { return a.Env == "production" }
 
 type DBConfig struct {
@@ -44,8 +39,6 @@ type DBConfig struct {
 	AutoMigrate     bool
 }
 
-// DSN builds a lib/pq-style connection string. Credentials are URL-escaped so
-// passwords containing special characters do not break the DSN.
 func (d DBConfig) DSN() string {
 	u := &url.URL{
 		Scheme: "postgres",
@@ -67,14 +60,10 @@ type JWTConfig struct {
 
 type HISConfig struct {
 	Timeout time.Duration
-	// BaseURLOverride, when set, replaces every hospital's stored HIS base URL.
-	// Used to point the whole service at a local mock HIS during development.
+
 	BaseURLOverride string
 }
 
-// Load reads configuration from the environment and validates it. It returns
-// every problem at once rather than failing on the first, so a misconfigured
-// deployment can be fixed in one pass.
 func Load() (*Config, error) {
 	env := &reader{}
 
@@ -114,7 +103,6 @@ func Load() (*Config, error) {
 }
 
 func (c *Config) validate(problems []string) error {
-
 	if c.DB.Password == "" {
 		problems = append(problems, "POSTGRES_PASSWORD is required")
 	}
@@ -140,14 +128,6 @@ func (c *Config) validate(problems []string) error {
 	return nil
 }
 
-// reader pulls typed values out of the environment, accumulating a problem for
-// anything it cannot parse.
-//
-// An unset variable falls back silently — that is the documented default. A
-// variable that is *set but malformed* is an operator mistake, and silently
-// substituting the default would hide it: `JWT_TTL=1hour` would quietly become
-// one hour, and nobody would find out until a token behaved unexpectedly in
-// production. Those fail the process at startup instead.
 type reader struct {
 	problems []string
 }

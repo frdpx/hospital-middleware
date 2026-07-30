@@ -43,8 +43,6 @@ type searchResponse struct {
 	Count int `json:"count"`
 }
 
-// ---------------------------------------------------------------- auth gate
-
 func TestPatientSearch_RequiresAValidToken(t *testing.T) {
 	t.Parallel()
 
@@ -92,8 +90,6 @@ func TestPatientSearch_RejectsExpiredToken(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, recorder.Code)
 	assert.Equal(t, apierr.CodeUnauthorized, errorCode(t, recorder))
 }
-
-// ------------------------------------------------------------- local search
 
 func TestPatientSearch_LocalHit(t *testing.T) {
 	t.Parallel()
@@ -169,7 +165,6 @@ func TestPatientSearch_ValidationErrors(t *testing.T) {
 	}
 }
 
-// A name search with no local match is an empty 200, not an error.
 func TestPatientSearch_NoLocalNameMatchReturnsEmptyList(t *testing.T) {
 	t.Parallel()
 
@@ -186,8 +181,6 @@ func TestPatientSearch_NoLocalNameMatchReturnsEmptyList(t *testing.T) {
 	assert.Contains(t, recorder.Body.String(), `"results":[]`)
 	assert.Equal(t, 0, server.his.CallCount())
 }
-
-// ------------------------------------------------------------ HIS fallback
 
 func TestPatientSearch_FallsBackToHISAndPersists(t *testing.T) {
 	t.Parallel()
@@ -206,7 +199,6 @@ func TestPatientSearch_FallsBackToHISAndPersists(t *testing.T) {
 	assert.Equal(t, 1, server.his.CallCount())
 	assert.Equal(t, 1, server.patients.UpsertCalls)
 
-	// The record is now local, so the HIS is not consulted again.
 	again := server.do(t, http.MethodPost, "/patient/search",
 		map[string]any{"national_id": "1234567890123"}, token)
 	require.Equal(t, http.StatusOK, again.Code)
@@ -249,16 +241,12 @@ func TestPatientSearch_HISFailures(t *testing.T) {
 
 			assert.Equal(t, tc.wantStatus, recorder.Code, recorder.Body.String())
 			assert.Equal(t, tc.wantCode, errorCode(t, recorder))
-			// Upstream connection details must not reach the client.
+
 			assert.NotContains(t, recorder.Body.String(), "10.0.0.1")
 		})
 	}
 }
 
-// ------------------------------------------------------- cross-hospital rules
-
-// The core access-control rule: a token for Hospital A must never surface a
-// patient that belongs to Hospital B.
 func TestPatientSearch_NeverLeaksAnotherHospitalsPatient(t *testing.T) {
 	t.Parallel()
 
@@ -298,8 +286,6 @@ func TestPatientSearch_NeverLeaksAnotherHospitalsPatient(t *testing.T) {
 	})
 }
 
-// The request body carries no hospital field; supplying one must not widen the
-// caller's scope beyond the hospital in their token.
 func TestPatientSearch_HospitalInBodyCannotOverrideTheTokenScope(t *testing.T) {
 	t.Parallel()
 
@@ -319,8 +305,6 @@ func TestPatientSearch_HospitalInBodyCannotOverrideTheTokenScope(t *testing.T) {
 	assert.NotContains(t, recorder.Body.String(), "B-HN-999")
 }
 
-// The same person may exist at both hospitals under different HNs; each side
-// sees only its own.
 func TestPatientSearch_SamePersonDifferentHNPerHospital(t *testing.T) {
 	t.Parallel()
 

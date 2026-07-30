@@ -7,22 +7,16 @@ import (
 	"time"
 )
 
-// DateLayout is the only date format accepted and emitted by this service.
 const DateLayout = "2006-01-02"
 
-// Date is a calendar date without a time component. Postgres DATE columns and
-// the HIS payloads both use plain YYYY-MM-DD, and using time.Time directly
-// would leak a meaningless 00:00:00 into every JSON response.
 type Date struct {
 	time.Time
 }
 
-// NewDate builds a Date from a time.Time, discarding the clock portion.
 func NewDate(t time.Time) Date {
 	return Date{Time: time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)}
 }
 
-// ParseDate parses a YYYY-MM-DD string.
 func ParseDate(s string) (Date, error) {
 	t, err := time.Parse(DateLayout, s)
 	if err != nil {
@@ -51,7 +45,6 @@ func (d *Date) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Value implements driver.Valuer so a Date can be passed straight to a query.
 func (d Date) Value() (driver.Value, error) {
 	if d.IsZero() {
 		return nil, nil
@@ -59,8 +52,6 @@ func (d Date) Value() (driver.Value, error) {
 	return d.Time, nil
 }
 
-// Scan implements sql.Scanner. Drivers return DATE columns as time.Time, but
-// string is accepted too so the type also works against sqlmock fixtures.
 func (d *Date) Scan(src any) error {
 	switch v := src.(type) {
 	case nil:

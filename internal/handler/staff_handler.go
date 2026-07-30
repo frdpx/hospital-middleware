@@ -11,7 +11,6 @@ import (
 	"github.com/bambam/hospital-middleware/internal/service"
 )
 
-// StaffHandler serves /staff/create and /staff/login.
 type StaffHandler struct {
 	staff  *service.StaffService
 	logger *slog.Logger
@@ -34,10 +33,6 @@ type createStaffResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Create handles POST /staff/create.
-//
-// The password is never echoed back, and the response carries no password hash
-// because models.Staff tags it json:"-".
 func (h *StaffHandler) Create(c *gin.Context) {
 	var req createStaffRequest
 	if err := bindJSON(c, &req); err != nil {
@@ -75,7 +70,6 @@ type loginResponse struct {
 	ExpiresIn   int64  `json:"expires_in"`
 }
 
-// Login handles POST /staff/login and returns a hospital-scoped JWT.
 func (h *StaffHandler) Login(c *gin.Context) {
 	var req loginRequest
 	if err := bindJSON(c, &req); err != nil {

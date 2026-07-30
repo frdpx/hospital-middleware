@@ -13,13 +13,8 @@ import (
 	"github.com/bambam/hospital-middleware/internal/models"
 )
 
-// maxHISResponseBytes caps how much of an upstream response we will read. A
-// misbehaving or compromised HIS must not be able to exhaust our memory.
-const maxHISResponseBytes = 1 << 20 // 1 MiB
+const maxHISResponseBytes = 1 << 20
 
-// hospitalAResponse mirrors the documented Hospital A payload verbatim. It
-// stays unexported: nothing outside this file should depend on Hospital A's
-// field shape.
 type hospitalAResponse struct {
 	FirstNameTH  string `json:"first_name_th"`
 	MiddleNameTH string `json:"middle_name_th"`
@@ -36,17 +31,11 @@ type hospitalAResponse struct {
 	Gender       string `json:"gender"`
 }
 
-// HospitalAClient talks to the Hospital A HIS:
-//
-//	GET {baseURL}/patient/search/{id}
 type HospitalAClient struct {
 	baseURL    string
 	httpClient *http.Client
 }
 
-// NewHospitalAClient builds a client for the given HIS base URL. A nil
-// httpClient falls back to a client with a conservative timeout, because an
-// http.Client without one waits forever and would pin our request goroutines.
 func NewHospitalAClient(baseURL string, httpClient *http.Client) *HospitalAClient {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 5 * time.Second}
@@ -62,8 +51,6 @@ func (c *HospitalAClient) FetchPatientByID(ctx context.Context, id string) (*Pat
 		return nil, fmt.Errorf("hisclient: empty patient identifier")
 	}
 
-	// PathEscape, not raw concatenation: a passport id containing "/" or ".."
-	// must not be able to redirect the request to another HIS endpoint.
 	endpoint := fmt.Sprintf("%s/patient/search/%s", c.baseURL, url.PathEscape(id))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -100,13 +87,10 @@ func (c *HospitalAClient) FetchPatientByID(ctx context.Context, id string) (*Pat
 	return profile, nil
 }
 
-// toProfile normalizes Hospital A's payload into our internal model.
 func (r hospitalAResponse) toProfile() (*PatientProfile, error) {
 	nationalID := optional(r.NationalID)
 	passportID := optional(r.PassportID)
 
-	// Without at least one globally unique identifier we cannot dedupe this
-	// person across hospitals, and the patients table would reject the row.
 	if nationalID == nil && passportID == nil {
 		return nil, fmt.Errorf("response has neither national_id nor passport_id")
 	}
@@ -138,9 +122,6 @@ func (r hospitalAResponse) toProfile() (*PatientProfile, error) {
 	}, nil
 }
 
-// hisDateLayouts covers the formats a HIS has been seen to emit for a date.
-// The spec only documents YYYY-MM-DD; the others are accepted defensively
-// rather than failing an otherwise valid patient record.
 var hisDateLayouts = []string{
 	models.DateLayout,
 	time.RFC3339,
@@ -162,9 +143,6 @@ func parseHISDate(raw string) (*models.Date, error) {
 	return nil, fmt.Errorf("unrecognized date_of_birth %q", raw)
 }
 
-// normalizeGender maps the HIS value onto our M/F domain, tolerating case and
-// the spelled-out forms. Anything unrecognized becomes empty rather than
-// failing the whole record.
 func normalizeGender(raw string) string {
 	switch strings.ToUpper(strings.TrimSpace(raw)) {
 	case "M", "MALE":
@@ -176,8 +154,6 @@ func normalizeGender(raw string) string {
 	}
 }
 
-// optional converts a HIS empty string into a NULL-able nil pointer, so
-// "absent" and "empty" do not both end up stored as the same empty string.
 func optional(s string) *string {
 	trimmed := strings.TrimSpace(s)
 	if trimmed == "" {

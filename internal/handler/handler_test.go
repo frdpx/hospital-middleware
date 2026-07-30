@@ -24,10 +24,6 @@ import (
 	"github.com/bambam/hospital-middleware/internal/testutil"
 )
 
-// These tests drive the real Gin router end to end — middleware, binding,
-// services and error rendering — with only the database and the HIS replaced
-// by in-memory fakes. That is where the HTTP contract actually lives.
-
 var (
 	hospitalAID = uuid.MustParse("11111111-1111-4111-8111-111111111111")
 	hospitalBID = uuid.MustParse("22222222-2222-4222-8222-222222222222")
@@ -82,8 +78,6 @@ func newTestServer(t *testing.T) *testServer {
 	}
 }
 
-// do issues a request against the router. A non-empty token is sent as a
-// bearer credential.
 func (s *testServer) do(t *testing.T, method, path string, body any, token string) *httptest.ResponseRecorder {
 	t.Helper()
 
@@ -91,7 +85,7 @@ func (s *testServer) do(t *testing.T, method, path string, body any, token strin
 	switch v := body.(type) {
 	case nil:
 		reader = nil
-	case string: // raw payload, for malformed-JSON cases
+	case string:
 		reader = bytes.NewBufferString(v)
 	default:
 		encoded, err := json.Marshal(v)
@@ -110,7 +104,6 @@ func (s *testServer) do(t *testing.T, method, path string, body any, token strin
 	return recorder
 }
 
-// seedStaff registers a staff member directly, bypassing the API.
 func (s *testServer) seedStaff(t *testing.T, hospitalID uuid.UUID, username, password string) models.Staff {
 	t.Helper()
 
@@ -124,7 +117,6 @@ func (s *testServer) seedStaff(t *testing.T, hospitalID uuid.UUID, username, pas
 	return *created
 }
 
-// tokenFor mints a valid token for a hospital without going through login.
 func (s *testServer) tokenFor(t *testing.T, hospitalID uuid.UUID) string {
 	t.Helper()
 
@@ -135,7 +127,6 @@ func (s *testServer) tokenFor(t *testing.T, hospitalID uuid.UUID) string {
 	return token
 }
 
-// expiredTokenFor mints a token that was valid two hours ago.
 func (s *testServer) expiredTokenFor(t *testing.T, hospitalID uuid.UUID) string {
 	t.Helper()
 
@@ -147,7 +138,6 @@ func (s *testServer) expiredTokenFor(t *testing.T, hospitalID uuid.UUID) string 
 	return token
 }
 
-// errorCode extracts the machine-readable code from our error envelope.
 func errorCode(t *testing.T, recorder *httptest.ResponseRecorder) string {
 	t.Helper()
 
@@ -181,9 +171,6 @@ func TestRouter_HealthAndReadiness(t *testing.T) {
 	}
 }
 
-// A panic must become our error envelope, not a dropped connection and not
-// gin's default output. This is the one middleware whose failure is invisible
-// until it is needed, so it gets an explicit test.
 func TestRouter_RecoversFromAPanic(t *testing.T) {
 	t.Parallel()
 
@@ -196,10 +183,9 @@ func TestRouter_RecoversFromAPanic(t *testing.T) {
 
 	require.Equal(t, http.StatusInternalServerError, recorder.Code)
 	require.Equal(t, "INTERNAL_ERROR", errorCode(t, recorder))
-	// The panic value describes our internals; it must not reach the client.
+
 	require.NotContains(t, recorder.Body.String(), "something went very wrong")
 
-	// The router must still serve other requests afterwards.
 	after := server.do(t, http.MethodGet, "/healthz", nil, "")
 	require.Equal(t, http.StatusOK, after.Code)
 }

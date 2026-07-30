@@ -1,6 +1,3 @@
-// Package apierr defines the single error type that travels from repository
-// and service layers up to the HTTP handlers, so that every endpoint renders
-// the same error envelope without each handler re-deciding status codes.
 package apierr
 
 import (
@@ -9,8 +6,6 @@ import (
 	"net/http"
 )
 
-// Machine-readable error codes returned in the response body. Clients should
-// branch on these, never on the human-readable message.
 const (
 	CodeValidation         = "VALIDATION_ERROR"
 	CodeInvalidCredentials = "INVALID_CREDENTIALS"
@@ -24,8 +19,6 @@ const (
 	CodeInternal           = "INTERNAL_ERROR"
 )
 
-// Error is an HTTP-aware error: it carries the status code and the client-safe
-// message, while keeping the underlying cause for logging only.
 type Error struct {
 	Status  int
 	Code    string
@@ -40,12 +33,8 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
-// Unwrap exposes the cause to errors.Is/errors.As without ever putting it in a
-// response body — internal details (SQL text, upstream URLs) must not leak.
 func (e *Error) Unwrap() error { return e.cause }
 
-// WithCause attaches an underlying error for logging. It returns a copy so the
-// package-level sentinel values stay immutable.
 func (e *Error) WithCause(err error) *Error {
 	clone := *e
 	clone.cause = err
@@ -61,8 +50,6 @@ func Validation(message string) *Error {
 }
 
 func InvalidCredentials() *Error {
-	// Deliberately vague: never reveal whether the username or the hospital
-	// existed, which would let an attacker enumerate accounts.
 	return newError(http.StatusUnauthorized, CodeInvalidCredentials, "username, password or hospital is incorrect")
 }
 
@@ -86,10 +73,6 @@ func UsernameTaken() *Error {
 	return newError(http.StatusConflict, CodeUsernameTaken, "username already exists for this hospital")
 }
 
-// IdentifierConflict reports that the HIS returned an identifier already held
-// by a different canonical patient. That is a genuine data conflict between two
-// upstream systems, not a bug on our side, so it is a 409 a human can act on
-// rather than an opaque 500.
 func IdentifierConflict() *Error {
 	return newError(http.StatusConflict, CodeIdentifierConflict,
 		"the hospital information system returned an identifier that already belongs to a different patient")
@@ -103,8 +86,6 @@ func Internal() *Error {
 	return newError(http.StatusInternalServerError, CodeInternal, "internal server error")
 }
 
-// From maps any error to an *Error. Errors that were never classified become a
-// generic 500 so that unexpected internals are never rendered to a client.
 func From(err error) *Error {
 	if err == nil {
 		return nil

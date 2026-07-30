@@ -16,8 +16,6 @@ import (
 	"github.com/bambam/hospital-middleware/internal/models"
 )
 
-// newMockHIS spins up the bundled Hospital A stand-in and returns a client
-// pointed at it.
 func newMockHIS(t *testing.T, patients ...mockhis.Patient) *hisclient.HospitalAClient {
 	t.Helper()
 
@@ -201,8 +199,6 @@ func TestHospitalAClient_FetchPatientByID_EmptyIdentifier(t *testing.T) {
 	assert.Contains(t, err.Error(), "empty patient identifier")
 }
 
-// A passport id containing path separators must not be able to steer the
-// request at a different HIS endpoint.
 func TestHospitalAClient_FetchPatientByID_EscapesIdentifierInPath(t *testing.T) {
 	t.Parallel()
 

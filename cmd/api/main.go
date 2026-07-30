@@ -1,8 +1,3 @@
-// Command api runs the Hospital Middleware HTTP service.
-//
-// This file is the composition root: it is the only place that knows about
-// concrete implementations. Every layer below depends on interfaces, which is
-// what keeps the service and handler packages unit-testable.
 package main
 
 import (
@@ -46,8 +41,6 @@ func run() error {
 	logger := newLogger(cfg.App.LogLevel)
 	slog.SetDefault(logger)
 
-	// Shut down cleanly on SIGINT/SIGTERM so docker compose down does not kill
-	// in-flight requests.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -68,7 +61,6 @@ func run() error {
 		logger.Info("migrations applied")
 	}
 
-	// --- wiring: repositories -> services -> handlers ---
 	hospitalRepo := repository.NewHospitalRepository(pool)
 	staffRepo := repository.NewStaffRepository(pool)
 	patientRepo := repository.NewPatientRepository(pool)
@@ -94,7 +86,7 @@ func run() error {
 	server := &http.Server{
 		Addr:    net.JoinHostPort("", cfg.App.Port),
 		Handler: router,
-		// Guards against slowloris-style clients holding connections open.
+
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -126,7 +118,6 @@ func run() error {
 	return nil
 }
 
-// newLogger emits JSON so container logs are machine-parseable.
 func newLogger(level string) *slog.Logger {
 	var slogLevel slog.Level
 	if err := slogLevel.UnmarshalText([]byte(level)); err != nil {

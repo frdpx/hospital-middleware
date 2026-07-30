@@ -9,12 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// RequestIDHeader is echoed on every response so a client can quote it in a
-// bug report and it can be grepped straight out of the logs.
 const RequestIDHeader = "X-Request-ID"
 
-// RequestID assigns each request a correlation id, reusing the caller's if it
-// supplied one (so an id survives the hop through nginx).
 func RequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.GetHeader(RequestIDHeader)
@@ -27,10 +23,6 @@ func RequestID() gin.HandlerFunc {
 	}
 }
 
-// AccessLog emits one structured line per request.
-//
-// It deliberately logs no request body and no query string: those carry
-// national ids and patient names, which do not belong in application logs.
 func AccessLog(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -56,8 +48,6 @@ func AccessLog(logger *slog.Logger) gin.HandlerFunc {
 	}
 }
 
-// Recovery converts a panic into a 500 with our standard error envelope,
-// instead of gin's default HTML-ish output, and logs the stack.
 func Recovery(logger *slog.Logger) gin.HandlerFunc {
 	return gin.CustomRecoveryWithWriter(nil, func(c *gin.Context, recovered any) {
 		logger.Error("panic recovered",

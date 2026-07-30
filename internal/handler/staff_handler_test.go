@@ -11,8 +11,6 @@ import (
 	"github.com/bambam/hospital-middleware/internal/apierr"
 )
 
-// ------------------------------------------------------ POST /staff/create
-
 func TestStaffCreate_Success(t *testing.T) {
 	t.Parallel()
 
@@ -32,7 +30,6 @@ func TestStaffCreate_Success(t *testing.T) {
 	assert.NotEmpty(t, body["id"])
 	assert.NotEmpty(t, body["created_at"])
 
-	// The response must never carry the password or its hash.
 	assert.NotContains(t, recorder.Body.String(), "P@ssw0rd123")
 	assert.NotContains(t, strings.ToLower(recorder.Body.String()), "password")
 }
@@ -105,8 +102,6 @@ func TestStaffCreate_Rejections(t *testing.T) {
 	}
 }
 
-// Validation messages must name the JSON field the client sent, not the Go
-// struct field — "Password" appears nowhere in our API spec.
 func TestStaffCreate_ValidationMessagesUseJSONFieldNames(t *testing.T) {
 	t.Parallel()
 
@@ -174,8 +169,6 @@ func TestStaffCreate_SameUsernameAtAnotherHospitalIsAllowed(t *testing.T) {
 	require.Equal(t, http.StatusCreated, atB.Code, atB.Body.String())
 	assert.Equal(t, 2, server.staff.Count())
 }
-
-// ------------------------------------------------------- POST /staff/login
 
 func TestStaffLogin_Success(t *testing.T) {
 	t.Parallel()
@@ -268,7 +261,6 @@ func TestStaffLogin_Rejections(t *testing.T) {
 	}
 }
 
-// Signing up and then logging in must work as one flow.
 func TestStaff_CreateThenLogin(t *testing.T) {
 	t.Parallel()
 

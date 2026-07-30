@@ -1,9 +1,3 @@
-// Command mockhis serves a stand-in for the Hospital A HIS during local
-// development, because https://hospital-a.api.co.th is not reachable from a
-// dev machine. Point the API at it with HIS_BASE_URL_OVERRIDE.
-//
-//	go run ./cmd/mockhis                       # listens on :9090
-//	HIS_BASE_URL_OVERRIDE=http://localhost:9090 go run ./cmd/api
 package main
 
 import (

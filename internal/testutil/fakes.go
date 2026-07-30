@@ -1,11 +1,3 @@
-// Package testutil provides in-memory repository fakes shared by the service
-// and handler test suites.
-//
-// These are behavioural fakes, not stubs: PatientRepo really filters by
-// hospital and by every criterion. That matters because the single most
-// important rule in this service — a staff member cannot see another
-// hospital's patients — is only meaningfully tested if the fake can actually
-// return the wrong hospital's data when the code under test asks for it.
 package testutil
 
 import (
@@ -21,12 +13,10 @@ import (
 	"github.com/bambam/hospital-middleware/internal/models"
 )
 
-// ---------------------------------------------------------------- hospitals
-
 type HospitalRepo struct {
 	mu        sync.Mutex
 	hospitals []models.Hospital
-	// Err, when set, is returned by every method — used for 500-path tests.
+
 	Err error
 }
 
@@ -66,12 +56,10 @@ func (r *HospitalRepo) FindByID(_ context.Context, id uuid.UUID) (*models.Hospit
 	return nil, apierr.HospitalNotFound()
 }
 
-// -------------------------------------------------------------------- staff
-
 type StaffRepo struct {
 	mu    sync.Mutex
 	staff []models.Staff
-	// CreateErr / FindErr force the corresponding method to fail.
+
 	CreateErr error
 	FindErr   error
 }
@@ -80,8 +68,6 @@ func NewStaffRepo(staff ...models.Staff) *StaffRepo {
 	return &StaffRepo{staff: staff}
 }
 
-// Create mirrors the real unique index: a duplicate is only a duplicate within
-// the same hospital.
 func (r *StaffRepo) Create(_ context.Context, staff *models.Staff) (*models.Staff, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -116,18 +102,15 @@ func (r *StaffRepo) FindByHospitalAndUsername(_ context.Context, hospitalID uuid
 			return &s, nil
 		}
 	}
-	// Contract: a missing staff member is (nil, nil), not an error.
+
 	return nil, nil
 }
 
-// Count reports how many staff rows exist, for assertions.
 func (r *StaffRepo) Count() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.staff)
 }
-
-// ----------------------------------------------------------------- patients
 
 type PatientRepo struct {
 	mu       sync.Mutex
@@ -136,8 +119,7 @@ type PatientRepo struct {
 
 	SearchErr error
 	UpsertErr error
-	// UpsertCalls counts HIS-triggered writes, so tests can assert the HIS
-	// fallback did (or did not) fire.
+
 	UpsertCalls int
 }
 
@@ -145,7 +127,6 @@ func NewPatientRepo() *PatientRepo {
 	return &PatientRepo{}
 }
 
-// Seed registers a patient as known to a hospital under the given HN.
 func (r *PatientRepo) Seed(hospitalID uuid.UUID, patientHN string, patient models.Patient) models.Patient {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -174,7 +155,6 @@ func (r *PatientRepo) Search(_ context.Context, criteria models.PatientSearchCri
 
 	records := make([]models.PatientRecord, 0)
 	for _, link := range r.links {
-		// The hospital filter comes first, exactly as in the real SQL.
 		if link.HospitalID != criteria.HospitalID {
 			continue
 		}
@@ -204,8 +184,6 @@ func (r *PatientRepo) UpsertFromHIS(_ context.Context, hospitalID uuid.UUID, pro
 	if found {
 		for i := range r.patients {
 			if r.patients[i].ID == patientID {
-				// Mirrors the real UPDATE's COALESCE merge: a field the
-				// incoming HIS did not report must not erase the stored one.
 				r.patients[i] = mergePatient(r.patients[i], profile.Patient)
 			}
 		}
@@ -233,10 +211,6 @@ func (r *PatientRepo) UpsertFromHIS(_ context.Context, hospitalID uuid.UUID, pro
 	return nil
 }
 
-// mergePatient layers incoming HIS data over a stored record without letting
-// absent incoming values blank out known ones. It is the in-memory twin of the
-// COALESCE/NULLIF merge in repository.updatePatient — the two must agree, or
-// tests would be validating behaviour the database does not have.
 func mergePatient(stored, incoming models.Patient) models.Patient {
 	merged := stored
 
@@ -291,7 +265,6 @@ func (r *PatientRepo) findByIdentifier(target models.Patient) (uuid.UUID, bool) 
 	return uuid.Nil, false
 }
 
-// matches mirrors the WHERE clause of PatientRepository.Search.
 func matches(p models.Patient, c models.PatientSearchCriteria) bool {
 	if c.NationalID != nil && !equalPtr(p.NationalID, c.NationalID) {
 		return false
@@ -343,5 +316,4 @@ func deref(s *string) string {
 	return *s
 }
 
-// Ptr is a convenience for building the pointer-heavy models in tests.
 func Ptr[T any](v T) *T { return &v }

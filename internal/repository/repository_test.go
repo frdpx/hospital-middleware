@@ -21,10 +21,6 @@ import (
 	"github.com/bambam/hospital-middleware/internal/repository"
 )
 
-// These tests use sqlmock to assert the SQL itself — that the hospital filter
-// is always present, that values are bound rather than interpolated, and that
-// a Postgres unique violation becomes a 409 rather than a 500.
-
 var (
 	hospitalAID = uuid.MustParse("11111111-1111-4111-8111-111111111111")
 	patientID   = uuid.MustParse("33333333-3333-4333-8333-333333333333")
@@ -45,8 +41,6 @@ func newMockDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock) {
 func uniqueViolation(constraint string) error {
 	return &pgconn.PgError{Code: "23505", ConstraintName: constraint}
 }
-
-// -------------------------------------------------------- HospitalRepository
 
 func TestHospitalRepository_FindByCodeOrName(t *testing.T) {
 	t.Parallel()
@@ -96,8 +90,6 @@ func TestHospitalRepository_FindByCodeOrName(t *testing.T) {
 		assert.NotContains(t, apiErr.Message, "connection reset")
 	})
 }
-
-// ----------------------------------------------------------- StaffRepository
 
 func TestStaffRepository_Create(t *testing.T) {
 	t.Parallel()
@@ -187,8 +179,6 @@ func TestStaffRepository_FindByHospitalAndUsername(t *testing.T) {
 	})
 }
 
-// --------------------------------------------------------- PatientRepository
-
 func patientRows() *sqlmock.Rows {
 	return sqlmock.NewRows([]string{
 		"id", "national_id", "passport_id",
@@ -226,8 +216,6 @@ func TestPatientRepository_Search_AlwaysFiltersByHospital(t *testing.T) {
 	assert.Equal(t, "1990-05-20", records[0].DateOfBirth.String())
 }
 
-// Every filter must arrive as a bound parameter in a stable order, with the
-// hospital scope always in position $1.
 func TestPatientRepository_Search_BindsEveryCriterionAsAParameter(t *testing.T) {
 	t.Parallel()
 
@@ -243,7 +231,7 @@ func TestPatientRepository_Search_BindsEveryCriterionAsAParameter(t *testing.T) 
 			"%Somchai%",
 			"%Sri%",
 			"%Jaidee%",
-			sqlmock.AnyArg(), // date_of_birth, passed through models.Date's Valuer
+			sqlmock.AnyArg(),
 			"0812345678",
 			"somchai@example.com",
 		).
@@ -266,7 +254,6 @@ func TestPatientRepository_Search_BindsEveryCriterionAsAParameter(t *testing.T) 
 	assert.NotNil(t, records, "no matches is an empty slice, never nil")
 }
 
-// A name filter must be attempted against both the Thai and the English column.
 func TestPatientRepository_Search_NameMatchesThaiAndEnglishColumns(t *testing.T) {
 	t.Parallel()
 
@@ -356,9 +343,6 @@ func TestPatientRepository_UpsertFromHIS(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	// Regression: the UPDATE must merge, not assign. A plain `email = $12`
-	// writes NULL whenever the incoming HIS omitted the field, silently
-	// destroying what another hospital's HIS had supplied for the same person.
 	t.Run("the update merges every field instead of overwriting", func(t *testing.T) {
 		t.Parallel()
 
@@ -383,8 +367,6 @@ func TestPatientRepository_UpsertFromHIS(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	// The NOT NULL name columns arrive as '' rather than NULL when the HIS has
-	// no value, so they need NULLIF before COALESCE to be preserved too.
 	t.Run("empty incoming names do not blank out stored ones", func(t *testing.T) {
 		t.Parallel()
 
@@ -423,9 +405,6 @@ func TestPatientRepository_UpsertFromHIS(t *testing.T) {
 		assert.Equal(t, apierr.CodeInternal, apierr.From(err).Code)
 	})
 
-	// Two staff searching for the same new patient at the same moment both see
-	// "not found" and both try to INSERT. One loses. That is normal under load,
-	// so it must resolve into a merge — not a 500 for whoever was slower.
 	t.Run("losing the insert race merges into the winner", func(t *testing.T) {
 		t.Parallel()
 
@@ -436,8 +415,7 @@ func TestPatientRepository_UpsertFromHIS(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectQuery(`INSERT INTO patients`).
 			WillReturnError(uniqueViolation("ux_patients_national_id"))
-		// A failed statement poisons the transaction in Postgres, so the
-		// attempt must be rewound before anything else can run.
+
 		mock.ExpectExec(`ROLLBACK TO SAVEPOINT before_patient_insert`).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectQuery(`SELECT id FROM patients`).
@@ -454,9 +432,6 @@ func TestPatientRepository_UpsertFromHIS(t *testing.T) {
 		require.NoError(t, err, "a lost race is expected under load, not a failure")
 	})
 
-	// Distinct from the race: the identifier belongs to a *different* person
-	// already on file, so two upstream systems disagree. A human must resolve
-	// that, and a 409 says so where a 500 says nothing.
 	t.Run("an identifier owned by a different patient is a conflict, not a 500", func(t *testing.T) {
 		t.Parallel()
 
@@ -469,8 +444,7 @@ func TestPatientRepository_UpsertFromHIS(t *testing.T) {
 			WillReturnError(uniqueViolation("ux_patients_passport_id"))
 		mock.ExpectExec(`ROLLBACK TO SAVEPOINT before_patient_insert`).
 			WillReturnResult(sqlmock.NewResult(0, 0))
-		// The re-lookup finds nothing: the clash was on an identifier we did
-		// not search by.
+
 		mock.ExpectQuery(`SELECT id FROM patients`).WillReturnError(sql.ErrNoRows)
 		mock.ExpectRollback()
 
@@ -512,8 +486,6 @@ func TestPatientRepository_UpsertFromHIS(t *testing.T) {
 	})
 }
 
-// The hospital scope must be a bound parameter, so a crafted identifier cannot
-// alter the query's structure.
 func TestPatientRepository_Search_DoesNotInterpolateUserInput(t *testing.T) {
 	t.Parallel()
 
@@ -531,7 +503,6 @@ func TestPatientRepository_Search_DoesNotInterpolateUserInput(t *testing.T) {
 
 	require.NoError(t, err)
 
-	// And the rendered SQL must not contain the payload itself.
 	queries := mock.ExpectationsWereMet()
 	assert.NoError(t, queries)
 	assert.NotRegexp(t, regexp.MustCompile(regexp.QuoteMeta(injection)), "query text is parameterized")

@@ -1,5 +1,3 @@
-// Package middleware holds cross-cutting Gin middleware: authentication,
-// request ids and access logging.
 package middleware
 
 import (
@@ -12,18 +10,10 @@ import (
 	"github.com/bambam/hospital-middleware/internal/auth"
 )
 
-// contextKeyClaims is where verified claims are stashed for downstream
-// handlers. Unexported so nothing outside this package can forge them by
-// writing to the context directly.
 const contextKeyClaims = "auth.claims"
 
 const bearerPrefix = "Bearer "
 
-// RequireAuth verifies the bearer token and puts the claims on the context.
-//
-// Every failure renders the same 401 body: telling a caller whether the token
-// was missing, malformed, expired or signed with the wrong key helps only an
-// attacker.
 func RequireAuth(tokens *auth.TokenManager) gin.HandlerFunc {
 	unauthorized := func(c *gin.Context) {
 		err := apierr.Unauthorized("a valid bearer token is required")
@@ -56,8 +46,6 @@ func RequireAuth(tokens *auth.TokenManager) gin.HandlerFunc {
 	}
 }
 
-// ClaimsFrom returns the verified claims placed by RequireAuth. A false result
-// means the route was not protected — a programming error, not a client one.
 func ClaimsFrom(c *gin.Context) (*auth.Claims, bool) {
 	value, exists := c.Get(contextKeyClaims)
 	if !exists {

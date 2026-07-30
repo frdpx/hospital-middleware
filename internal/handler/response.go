@@ -1,5 +1,3 @@
-// Package handler contains the Gin HTTP layer: it parses requests, delegates
-// to the service layer, and renders responses. It holds no business rules.
 package handler
 
 import (
@@ -19,11 +17,6 @@ import (
 
 var registerFieldNames sync.Once
 
-// useJSONFieldNames makes validation messages name the field the client
-// actually sent ("date_of_birth") rather than the Go struct field
-// ("DateOfBirth"), which would not appear anywhere in our API spec.
-//
-// gin keeps one process-wide validator, so this is guarded by a Once.
 func useJSONFieldNames() {
 	registerFieldNames.Do(func() {
 		validate, ok := binding.Validator.Engine().(*validator.Validate)
@@ -40,8 +33,6 @@ func useJSONFieldNames() {
 	})
 }
 
-// errorEnvelope is the single error shape every endpoint returns, so clients
-// write one error-handling branch instead of one per route.
 type errorEnvelope struct {
 	Error errorDetail `json:"error"`
 }
@@ -51,9 +42,6 @@ type errorDetail struct {
 	Message string `json:"message"`
 }
 
-// respondError renders err using its classified status and code. The
-// underlying cause is logged, never returned: SQL text and upstream URLs must
-// not reach a client.
 func respondError(c *gin.Context, logger *slog.Logger, err error) {
 	apiErr := apierr.From(err)
 
@@ -76,8 +64,6 @@ func respondError(c *gin.Context, logger *slog.Logger, err error) {
 	})
 }
 
-// bindJSON decodes and validates a request body, turning gin's binding errors
-// into our own VALIDATION_ERROR envelope with a field-level message.
 func bindJSON(c *gin.Context, target any) error {
 	if err := c.ShouldBindJSON(target); err != nil {
 		return apierr.Validation(validationMessage(err)).WithCause(err)
@@ -85,8 +71,6 @@ func bindJSON(c *gin.Context, target any) error {
 	return nil
 }
 
-// validationMessage turns the first validator failure into a message a client
-// can act on. Anything else (malformed JSON, wrong types) gets a generic hint.
 func validationMessage(err error) string {
 	var validationErrs validator.ValidationErrors
 	if errors.As(err, &validationErrs) && len(validationErrs) > 0 {

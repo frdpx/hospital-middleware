@@ -35,7 +35,6 @@ func somchai() models.Patient {
 	}
 }
 
-// newPatientService wires the service with in-memory repos and a fake HIS.
 func newPatientService(t *testing.T) (*service.PatientService, *testutil.PatientRepo, *testutil.FakeHIS) {
 	t.Helper()
 
@@ -139,10 +138,6 @@ func TestPatientService_Search_Rejections(t *testing.T) {
 	}
 }
 
-// Name matching is a substring match, so a one-character filter would return
-// most of the hospital's roster — national ids included — up to the result
-// limit. The length is counted in runes: a Thai character is three bytes, and a
-// byte-based check would reject "สม" while happily accepting "ab".
 func TestPatientService_Search_RejectsTooShortNameFilters(t *testing.T) {
 	t.Parallel()
 
@@ -186,7 +181,7 @@ func TestPatientService_Search_RejectsTooShortNameFilters(t *testing.T) {
 
 			svc, repo, fakeHIS := newPatientService(t)
 			repo.Seed(hospitalAID, "HN00123", somchai())
-			fakeHIS.Err = hisclient.ErrPatientNotFound // identifier lookups may miss
+			fakeHIS.Err = hisclient.ErrPatientNotFound
 
 			criteria := tc.criteria
 			criteria.HospitalID = hospitalAID
@@ -199,8 +194,7 @@ func TestPatientService_Search_RejectsTooShortNameFilters(t *testing.T) {
 				assert.Contains(t, apierr.From(err).Message, "at least 2 characters")
 				return
 			}
-			// Anything but a validation error is fine here; these cases are
-			// only asserting that the length gate lets them through.
+
 			if err != nil {
 				assert.NotEqual(t, apierr.CodeValidation, apierr.From(err).Code)
 			}
@@ -208,8 +202,6 @@ func TestPatientService_Search_RejectsTooShortNameFilters(t *testing.T) {
 	}
 }
 
-// A name/phone/email search that finds nothing is an empty result, not a 404
-// and not a HIS call: the HIS exposes no way to search by those fields.
 func TestPatientService_Search_NonIdentifierMissIsEmptyAndSkipsHIS(t *testing.T) {
 	t.Parallel()
 
@@ -275,7 +267,6 @@ func TestPatientService_Search_FallsBackToHIS(t *testing.T) {
 			assert.Equal(t, []string{tc.wantLookup}, fakeHIS.Calls)
 			assert.Equal(t, 1, repo.UpsertCalls, "the HIS result must be persisted, not just returned")
 
-			// A second identical search is served locally.
 			_, err = svc.Search(context.Background(), criteria)
 			require.NoError(t, err)
 			assert.Equal(t, 1, fakeHIS.CallCount(), "the second search must be served from local storage")
@@ -364,9 +355,6 @@ func TestPatientService_Search_UpsertFailureSurfacesAsInternal(t *testing.T) {
 	assert.NotContains(t, apierr.From(err).Message, "deadlock")
 }
 
-// The HIS answers on identifier alone. If the caller also supplied a name that
-// does not match the fetched patient, the re-run scoped query must filter them
-// out rather than returning a patient the caller did not ask for.
 func TestPatientService_Search_HISResultStillHonoursOtherCriteria(t *testing.T) {
 	t.Parallel()
 
@@ -385,10 +373,6 @@ func TestPatientService_Search_HISResultStillHonoursOtherCriteria(t *testing.T) 
 	assert.Equal(t, 1, repo.UpsertCalls, "the patient is still synced; they are just not a match")
 }
 
-// Regression: an identifier that is already on file for this hospital must not
-// send us back to the HIS just because some *other* criterion did not match.
-// Before this check, every such request cost one upstream call and one write
-// transaction and still returned 404 — repeatable without limit.
 func TestPatientService_Search_KnownIdentifierNeverRefetches(t *testing.T) {
 	t.Parallel()
 
@@ -412,22 +396,17 @@ func TestPatientService_Search_KnownIdentifierNeverRefetches(t *testing.T) {
 	assert.Equal(t, 0, repo.UpsertCalls, "and nothing must be written")
 }
 
-// Regression: a hospital whose HIS holds a thinner record of the same person
-// must not erase what another hospital's HIS already supplied. `patients` is
-// shared across hospitals, so a plain overwrite is cross-tenant data loss.
 func TestPatientService_Search_ResyncDoesNotEraseKnownFields(t *testing.T) {
 	t.Parallel()
 
 	svc, repo, fakeHIS := newPatientService(t)
 
-	// Hospital A knows this person in full.
 	rich := somchai()
 	rich.MiddleNameEN = testutil.Ptr("Somsak")
 	rich.MiddleNameTH = testutil.Ptr("สมศักดิ์")
 	rich.Email = testutil.Ptr("rich@example.com")
 	repo.Seed(hospitalAID, "A-HN-001", rich)
 
-	// Hospital B's HIS returns the same person with less detail.
 	thin := models.Patient{
 		NationalID:  testutil.Ptr("1234567890123"),
 		FirstNameEN: "Somchai",
@@ -436,7 +415,6 @@ func TestPatientService_Search_ResyncDoesNotEraseKnownFields(t *testing.T) {
 	}
 	fakeHIS.Add(&hisclient.PatientProfile{Patient: thin, PatientHN: "B-HN-777"})
 
-	// Hospital B has no link yet, so this search syncs from B's HIS.
 	fromB, err := svc.Search(context.Background(), models.PatientSearchCriteria{
 		HospitalID: hospitalBID,
 		NationalID: testutil.Ptr("1234567890123"),
@@ -445,7 +423,6 @@ func TestPatientService_Search_ResyncDoesNotEraseKnownFields(t *testing.T) {
 	require.Len(t, fromB, 1)
 	assert.Equal(t, "B-HN-777", fromB[0].PatientHN)
 
-	// Hospital A must still see everything it knew before B ever searched.
 	fromA, err := svc.Search(context.Background(), models.PatientSearchCriteria{
 		HospitalID: hospitalAID,
 		NationalID: testutil.Ptr("1234567890123"),
@@ -464,10 +441,6 @@ func TestPatientService_Search_ResyncDoesNotEraseKnownFields(t *testing.T) {
 	assert.Equal(t, "A-HN-001", fromA[0].PatientHN, "each hospital keeps its own HN")
 }
 
-// ------------------------------------------------------- cross-hospital rules
-
-// A patient registered only at Hospital B must be invisible to Hospital A's
-// staff, even though both hospitals share the same `patients` table.
 func TestPatientService_Search_NeverReturnsAnotherHospitalsPatient(t *testing.T) {
 	t.Parallel()
 
@@ -486,7 +459,6 @@ func TestPatientService_Search_NeverReturnsAnotherHospitalsPatient(t *testing.T)
 	})
 
 	t.Run("identifier search does not fall through to the other hospital's row", func(t *testing.T) {
-		// Hospital A's own HIS does not know this patient either.
 		records, err := svc.Search(context.Background(), models.PatientSearchCriteria{
 			HospitalID: hospitalAID,
 			NationalID: testutil.Ptr("1234567890123"),
@@ -509,8 +481,6 @@ func TestPatientService_Search_NeverReturnsAnotherHospitalsPatient(t *testing.T)
 	})
 }
 
-// The same person may be registered at two hospitals with different HNs; each
-// hospital's staff must see only their own HN.
 func TestPatientService_Search_SamePersonDifferentHNPerHospital(t *testing.T) {
 	t.Parallel()
 

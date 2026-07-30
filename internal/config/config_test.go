@@ -10,7 +10,6 @@ import (
 	"github.com/bambam/hospital-middleware/internal/config"
 )
 
-// validEnv is the minimum set of variables a valid deployment must provide.
 func validEnv() map[string]string {
 	return map[string]string{
 		"POSTGRES_PASSWORD": "hospital_dev_password",
@@ -99,9 +98,7 @@ func TestLoad_Rejections(t *testing.T) {
 			mutate:  func(env map[string]string) { env["HIS_TIMEOUT"] = "-1s" },
 			wantMsg: "HIS_TIMEOUT must be positive",
 		},
-		// A set-but-malformed value is an operator mistake. Silently falling
-		// back to the default would hide it until something behaved oddly in
-		// production, so it fails at startup instead.
+
 		{
 			name:    "duration missing its unit",
 			mutate:  func(env map[string]string) { env["JWT_TTL"] = "1hour" },
@@ -123,7 +120,7 @@ func TestLoad_Rejections(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			env := validEnv()
 			tc.mutate(env)
-			// t.Setenv cannot unset, so clear removed keys explicitly.
+
 			for _, key := range []string{"POSTGRES_PASSWORD", "JWT_SECRET"} {
 				if _, ok := env[key]; !ok {
 					t.Setenv(key, "")
@@ -140,8 +137,6 @@ func TestLoad_Rejections(t *testing.T) {
 	}
 }
 
-// Every problem should be reported in one pass, so a misconfigured deployment
-// is fixed in one edit rather than one restart per mistake.
 func TestLoad_ReportsEveryProblemAtOnce(t *testing.T) {
 	env := validEnv()
 	env["JWT_TTL"] = "1hour"

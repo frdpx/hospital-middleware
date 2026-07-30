@@ -21,10 +21,6 @@ func NewHospitalRepository(db Querier) *HospitalRepository {
 	return &HospitalRepository{db: db}
 }
 
-// FindByCodeOrName resolves the free-text `hospital` field of /staff/create and
-// /staff/login. Both the slug ("hospital-a") and the display name
-// ("Hospital A") are accepted, case-insensitively, because the assignment does
-// not say which form clients will send.
 func (r *HospitalRepository) FindByCodeOrName(ctx context.Context, identifier string) (*models.Hospital, error) {
 	const query = `
 		SELECT ` + hospitalColumns + `
@@ -35,8 +31,6 @@ func (r *HospitalRepository) FindByCodeOrName(ctx context.Context, identifier st
 	return scanHospital(r.db.QueryRowContext(ctx, query, identifier))
 }
 
-// FindByID loads the hospital referenced by a JWT, which is what tells the
-// patient search which HIS adapter to use.
 func (r *HospitalRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Hospital, error) {
 	const query = `
 		SELECT ` + hospitalColumns + `

@@ -1,16 +1,3 @@
-// Command migrate applies the embedded SQL migrations against the database
-// named by the usual POSTGRES_* environment variables.
-//
-// The API applies migrations itself on startup when DB_AUTO_MIGRATE=true. This
-// binary is the documented escape hatch for environments that want schema
-// changes gated separately from a deploy:
-//
-//	DB_AUTO_MIGRATE=false      # in the API's environment
-//	go run ./cmd/migrate       # run the change deliberately, then deploy
-//
-// -direction down rolls the schema back, and CI uses up/down/up to prove that
-// both directions of every migration are valid Postgres — something the unit
-// tests, which never touch a real database, cannot check.
 package main
 
 import (

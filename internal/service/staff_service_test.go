@@ -40,9 +40,6 @@ func testTokenManager() *auth.TokenManager {
 	})
 }
 
-// newStaffService wires the service with in-memory repositories. bcrypt cost is
-// dropped to MinCost: at the production cost a table of login tests takes tens
-// of seconds and tells us nothing extra.
 func newStaffService(t *testing.T, staff ...models.Staff) (*service.StaffService, *testutil.StaffRepo) {
 	t.Helper()
 
@@ -67,8 +64,6 @@ func hashedStaff(t *testing.T, hospitalID uuid.UUID, username, password string) 
 		PasswordHash: string(hash),
 	}
 }
-
-// ------------------------------------------------------------------- Create
 
 func TestStaffService_Create_Success(t *testing.T) {
 	t.Parallel()
@@ -222,8 +217,6 @@ func TestStaffService_Create_DuplicateUsernameWithinHospital(t *testing.T) {
 	assert.Equal(t, 1, repo.Count())
 }
 
-// The schema makes usernames unique per hospital, not globally — two hospitals
-// may each employ a "jsmith".
 func TestStaffService_Create_SameUsernameAtDifferentHospitalsIsAllowed(t *testing.T) {
 	t.Parallel()
 
@@ -244,8 +237,6 @@ func TestStaffService_Create_SameUsernameAtDifferentHospitalsIsAllowed(t *testin
 	assert.NotEqual(t, first.Staff.HospitalID, second.Staff.HospitalID)
 	assert.Equal(t, 2, repo.Count())
 }
-
-// -------------------------------------------------------------------- Login
 
 func TestStaffService_Login_Success(t *testing.T) {
 	t.Parallel()
@@ -274,7 +265,7 @@ func TestStaffService_Login_Rejections(t *testing.T) {
 	t.Parallel()
 
 	const password = "P@ssw0rd123"
-	// Same username at both hospitals, with different passwords.
+
 	staffAtA := hashedStaff(t, hospitalAID, "jsmith", password)
 	staffAtB := hashedStaff(t, hospitalBID, "jsmith", "hospital-b-password")
 
@@ -337,8 +328,6 @@ func TestStaffService_Login_Rejections(t *testing.T) {
 	}
 }
 
-// Each hospital's "jsmith" must authenticate only with their own password and
-// receive a token scoped to their own hospital.
 func TestStaffService_Login_SameUsernameDifferentHospitals(t *testing.T) {
 	t.Parallel()
 
@@ -364,7 +353,6 @@ func TestStaffService_Login_SameUsernameDifferentHospitals(t *testing.T) {
 	assert.Equal(t, hospitalAID, claimsA.HospitalID)
 	assert.Equal(t, hospitalBID, claimsB.HospitalID)
 
-	// Cross-use of passwords must fail.
 	_, err = svc.Login(context.Background(), service.LoginInput{
 		Username: "jsmith", Password: "password-at-b", Hospital: "hospital-a",
 	})
