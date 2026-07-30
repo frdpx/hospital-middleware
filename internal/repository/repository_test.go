@@ -353,6 +353,53 @@ func TestPatientRepository_UpsertFromHIS(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	// Regression: the UPDATE must merge, not assign. A plain `email = $12`
+	// writes NULL whenever the incoming HIS omitted the field, silently
+	// destroying what another hospital's HIS had supplied for the same person.
+	t.Run("the update merges every field instead of overwriting", func(t *testing.T) {
+		t.Parallel()
+
+		db, mock := newMockDB(t)
+		mock.ExpectBegin()
+		mock.ExpectQuery(`SELECT id FROM patients`).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(patientID))
+		mock.ExpectExec(`UPDATE patients SET` +
+			`(?s).*national_id\s+= COALESCE\(\$2, national_id\)` +
+			`(?s).*middle_name_th = COALESCE\(\$5, middle_name_th\)` +
+			`(?s).*middle_name_en = COALESCE\(\$8, middle_name_en\)` +
+			`(?s).*date_of_birth\s+= COALESCE\(\$10, date_of_birth\)` +
+			`(?s).*phone_number\s+= COALESCE\(\$11, phone_number\)` +
+			`(?s).*email\s+= COALESCE\(\$12, email\)`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`INSERT INTO hospital_patients`).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		err := repository.NewPatientRepository(db).UpsertFromHIS(context.Background(), hospitalAID, profile)
+
+		require.NoError(t, err)
+	})
+
+	// The NOT NULL name columns arrive as '' rather than NULL when the HIS has
+	// no value, so they need NULLIF before COALESCE to be preserved too.
+	t.Run("empty incoming names do not blank out stored ones", func(t *testing.T) {
+		t.Parallel()
+
+		db, mock := newMockDB(t)
+		mock.ExpectBegin()
+		mock.ExpectQuery(`SELECT id FROM patients`).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(patientID))
+		mock.ExpectExec(`(?s)first_name_en\s+= COALESCE\(NULLIF\(\$7, ''\), first_name_en\).*gender\s+= COALESCE\(NULLIF\(\$13, ''\), gender\)`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`INSERT INTO hospital_patients`).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		err := repository.NewPatientRepository(db).UpsertFromHIS(context.Background(), hospitalAID, profile)
+
+		require.NoError(t, err)
+	})
+
 	t.Run("a failed link rolls back the patient write", func(t *testing.T) {
 		t.Parallel()
 

@@ -200,6 +200,9 @@ client ──► nginx ──► Go API ──► PostgreSQL
 - Name search uses `ILIKE '%term%'`, which cannot use a btree index for a
   leading wildcard. Fine at this scale; `pg_trgm` GIN indexes are the fix.
 - `synced_at` is recorded but not yet used to re-fetch stale records — today
-  the HIS is only consulted when a record is *absent*.
+  the HIS is only consulted when an identifier is *absent* for that hospital.
+- A HIS sync merges into the stored record and can never clear a field, so a
+  value genuinely deleted upstream persists here until an operator removes it.
+  Preserving a stale value beats letting a thinner HIS erase a good one.
 - No refresh tokens; a token simply expires after `JWT_TTL` (default 1 hour).
 - No pagination on search results; they are capped at 100 rows.

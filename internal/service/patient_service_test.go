@@ -316,6 +316,85 @@ func TestPatientService_Search_HISResultStillHonoursOtherCriteria(t *testing.T) 
 	assert.Equal(t, 1, repo.UpsertCalls, "the patient is still synced; they are just not a match")
 }
 
+// Regression: an identifier that is already on file for this hospital must not
+// send us back to the HIS just because some *other* criterion did not match.
+// Before this check, every such request cost one upstream call and one write
+// transaction and still returned 404 — repeatable without limit.
+func TestPatientService_Search_KnownIdentifierNeverRefetches(t *testing.T) {
+	t.Parallel()
+
+	svc, repo, fakeHIS := newPatientService(t)
+	repo.Seed(hospitalAID, "HN00123", somchai())
+	fakeHIS.Add(&hisclient.PatientProfile{Patient: somchai(), PatientHN: "HN00123"})
+
+	for i := range 3 {
+		records, err := svc.Search(context.Background(), models.PatientSearchCriteria{
+			HospitalID: hospitalAID,
+			NationalID: testutil.Ptr("1234567890123"),
+			LastName:   testutil.Ptr("Wrongname"),
+		})
+
+		assert.Nil(t, records, "attempt %d", i+1)
+		require.Error(t, err)
+		assert.Equal(t, apierr.CodePatientNotFound, apierr.From(err).Code)
+	}
+
+	assert.Equal(t, 0, fakeHIS.CallCount(), "the patient is already on file; the HIS must not be consulted")
+	assert.Equal(t, 0, repo.UpsertCalls, "and nothing must be written")
+}
+
+// Regression: a hospital whose HIS holds a thinner record of the same person
+// must not erase what another hospital's HIS already supplied. `patients` is
+// shared across hospitals, so a plain overwrite is cross-tenant data loss.
+func TestPatientService_Search_ResyncDoesNotEraseKnownFields(t *testing.T) {
+	t.Parallel()
+
+	svc, repo, fakeHIS := newPatientService(t)
+
+	// Hospital A knows this person in full.
+	rich := somchai()
+	rich.MiddleNameEN = testutil.Ptr("Somsak")
+	rich.MiddleNameTH = testutil.Ptr("สมศักดิ์")
+	rich.Email = testutil.Ptr("rich@example.com")
+	repo.Seed(hospitalAID, "A-HN-001", rich)
+
+	// Hospital B's HIS returns the same person with less detail.
+	thin := models.Patient{
+		NationalID:  testutil.Ptr("1234567890123"),
+		FirstNameEN: "Somchai",
+		LastNameEN:  "Jaidee",
+		Gender:      models.GenderMale,
+	}
+	fakeHIS.Add(&hisclient.PatientProfile{Patient: thin, PatientHN: "B-HN-777"})
+
+	// Hospital B has no link yet, so this search syncs from B's HIS.
+	fromB, err := svc.Search(context.Background(), models.PatientSearchCriteria{
+		HospitalID: hospitalBID,
+		NationalID: testutil.Ptr("1234567890123"),
+	})
+	require.NoError(t, err)
+	require.Len(t, fromB, 1)
+	assert.Equal(t, "B-HN-777", fromB[0].PatientHN)
+
+	// Hospital A must still see everything it knew before B ever searched.
+	fromA, err := svc.Search(context.Background(), models.PatientSearchCriteria{
+		HospitalID: hospitalAID,
+		NationalID: testutil.Ptr("1234567890123"),
+	})
+	require.NoError(t, err)
+	require.Len(t, fromA, 1)
+
+	require.NotNil(t, fromA[0].MiddleNameEN, "middle_name_en was erased by the thinner re-sync")
+	assert.Equal(t, "Somsak", *fromA[0].MiddleNameEN)
+	require.NotNil(t, fromA[0].MiddleNameTH)
+	assert.Equal(t, "สมศักดิ์", *fromA[0].MiddleNameTH)
+	require.NotNil(t, fromA[0].Email)
+	assert.Equal(t, "rich@example.com", *fromA[0].Email)
+	require.NotNil(t, fromA[0].DateOfBirth, "date_of_birth was erased")
+	assert.Equal(t, "1990-05-20", fromA[0].DateOfBirth.String())
+	assert.Equal(t, "A-HN-001", fromA[0].PatientHN, "each hospital keeps its own HN")
+}
+
 // ------------------------------------------------------- cross-hospital rules
 
 // A patient registered only at Hospital B must be invisible to Hospital A's

@@ -204,9 +204,9 @@ func (r *PatientRepo) UpsertFromHIS(_ context.Context, hospitalID uuid.UUID, pro
 	if found {
 		for i := range r.patients {
 			if r.patients[i].ID == patientID {
-				updated := profile.Patient
-				updated.ID = patientID
-				r.patients[i] = updated
+				// Mirrors the real UPDATE's COALESCE merge: a field the
+				// incoming HIS did not report must not erase the stored one.
+				r.patients[i] = mergePatient(r.patients[i], profile.Patient)
 			}
 		}
 	} else {
@@ -231,6 +231,46 @@ func (r *PatientRepo) UpsertFromHIS(_ context.Context, hospitalID uuid.UUID, pro
 		SyncedAt:   time.Now().UTC(),
 	})
 	return nil
+}
+
+// mergePatient layers incoming HIS data over a stored record without letting
+// absent incoming values blank out known ones. It is the in-memory twin of the
+// COALESCE/NULLIF merge in repository.updatePatient — the two must agree, or
+// tests would be validating behaviour the database does not have.
+func mergePatient(stored, incoming models.Patient) models.Patient {
+	merged := stored
+
+	merged.NationalID = firstNonNil(incoming.NationalID, stored.NationalID)
+	merged.PassportID = firstNonNil(incoming.PassportID, stored.PassportID)
+	merged.MiddleNameTH = firstNonNil(incoming.MiddleNameTH, stored.MiddleNameTH)
+	merged.MiddleNameEN = firstNonNil(incoming.MiddleNameEN, stored.MiddleNameEN)
+	merged.PhoneNumber = firstNonNil(incoming.PhoneNumber, stored.PhoneNumber)
+	merged.Email = firstNonNil(incoming.Email, stored.Email)
+
+	merged.FirstNameTH = firstNonEmpty(incoming.FirstNameTH, stored.FirstNameTH)
+	merged.LastNameTH = firstNonEmpty(incoming.LastNameTH, stored.LastNameTH)
+	merged.FirstNameEN = firstNonEmpty(incoming.FirstNameEN, stored.FirstNameEN)
+	merged.LastNameEN = firstNonEmpty(incoming.LastNameEN, stored.LastNameEN)
+	merged.Gender = firstNonEmpty(incoming.Gender, stored.Gender)
+
+	if incoming.DateOfBirth != nil {
+		merged.DateOfBirth = incoming.DateOfBirth
+	}
+	return merged
+}
+
+func firstNonNil(incoming, stored *string) *string {
+	if incoming != nil {
+		return incoming
+	}
+	return stored
+}
+
+func firstNonEmpty(incoming, stored string) string {
+	if strings.TrimSpace(incoming) != "" {
+		return incoming
+	}
+	return stored
 }
 
 func (r *PatientRepo) findPatient(id uuid.UUID) (models.Patient, bool) {

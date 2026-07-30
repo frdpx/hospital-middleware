@@ -66,6 +66,24 @@ func (s *PatientService) Search(ctx context.Context, criteria models.PatientSear
 		return records, nil
 	}
 
+	// The full filter matched nothing, but that is not the same as "we have
+	// never heard of this patient". If the identifier alone is already on file
+	// for this hospital, the miss came from the *other* criteria — and calling
+	// the HIS would return the same patient, who would still fail those
+	// criteria. Without this check every such request costs one upstream call
+	// and one write transaction, forever, for a guaranteed 404.
+	known, err := s.patients.Search(ctx, models.PatientSearchCriteria{
+		HospitalID: criteria.HospitalID,
+		NationalID: criteria.NationalID,
+		PassportID: criteria.PassportID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(known) > 0 {
+		return nil, apierr.PatientNotFound()
+	}
+
 	if err := s.syncFromHIS(ctx, criteria); err != nil {
 		return nil, err
 	}

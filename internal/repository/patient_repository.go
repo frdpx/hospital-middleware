@@ -182,24 +182,36 @@ func insertPatient(ctx context.Context, tx Querier, patient models.Patient) (uui
 	return id, nil
 }
 
-// updatePatient refreshes demographics from the HIS, which is the source of
-// truth. COALESCE keeps a previously known identifier when this HIS did not
-// report it — losing a national_id would break future dedup across hospitals.
+// updatePatient refreshes demographics from the HIS.
+//
+// Every field is merged, never overwritten: a value the incoming HIS did not
+// report (NULL, or an empty string for the NOT NULL columns) leaves the stored
+// one intact.
+//
+// This matters because `patients` is shared across hospitals. Hospital B's HIS
+// may hold a thinner record of the same person than Hospital A's did, and a
+// plain assignment would let a search from B silently erase what A supplied —
+// destroying exactly the cross-hospital identity this table exists to hold.
+//
+// The trade-off: a field can never be *cleared* through this path. For a
+// middleware that caches upstream data, preserving a stale value is strictly
+// safer than destroying a good one, and a genuine deletion is an operator
+// action rather than a side effect of somebody running a search.
 func updatePatient(ctx context.Context, tx Querier, id uuid.UUID, patient models.Patient) error {
 	const query = `
 		UPDATE patients SET
 			national_id    = COALESCE($2, national_id),
 			passport_id    = COALESCE($3, passport_id),
-			first_name_th  = $4,
-			middle_name_th = $5,
-			last_name_th   = $6,
-			first_name_en  = $7,
-			middle_name_en = $8,
-			last_name_en   = $9,
-			date_of_birth  = $10,
-			phone_number   = $11,
-			email          = $12,
-			gender         = $13,
+			first_name_th  = COALESCE(NULLIF($4, ''), first_name_th),
+			middle_name_th = COALESCE($5, middle_name_th),
+			last_name_th   = COALESCE(NULLIF($6, ''), last_name_th),
+			first_name_en  = COALESCE(NULLIF($7, ''), first_name_en),
+			middle_name_en = COALESCE($8, middle_name_en),
+			last_name_en   = COALESCE(NULLIF($9, ''), last_name_en),
+			date_of_birth  = COALESCE($10, date_of_birth),
+			phone_number   = COALESCE($11, phone_number),
+			email          = COALESCE($12, email),
+			gender         = COALESCE(NULLIF($13, ''), gender),
 			updated_at     = now()
 		WHERE id = $1`
 

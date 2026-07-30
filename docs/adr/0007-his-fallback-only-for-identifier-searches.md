@@ -21,6 +21,24 @@ returning the fetched patient would hand back someone they did not ask for.
 Re-running the scoped query keeps the hospital filter *and* every other
 criterion authoritative on one code path. There is a test for exactly this.
 
+**Why "no local match" is not enough to justify calling the HIS.** The first
+implementation triggered the fallback whenever the *full* filtered search
+returned zero rows. That made a mismatched extra criterion
+(`national_id` we hold + `last_name` that does not match) call the HIS and
+write a transaction on **every** request, forever, for a guaranteed 404 —
+measured at one upstream call per request against the running stack. The
+service now asks a second, cheap question first: *is this identifier already on
+file for this hospital?* If it is, the miss came from the other criteria and no
+amount of re-fetching will change the answer. Only a genuinely unknown
+identifier reaches the HIS.
+
+**Why the sync merges rather than overwrites.** `patients` is shared across
+hospitals, so a re-sync driven by Hospital B must not erase what Hospital A's
+HIS supplied for the same person. `repository.updatePatient` COALESCEs every
+field, meaning an absent incoming value leaves the stored one intact. The cost
+is that this path can never *clear* a field; deliberate deletion is an operator
+action, not a side effect of somebody running a search.
+
 **Consequences.**
 - A name search never blocks on an external call — it cannot, since there is
   nothing to call.
