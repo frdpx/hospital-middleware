@@ -35,6 +35,9 @@ func NewRouter(deps RouterDeps) *gin.Engine {
 	}
 
 	router := gin.New()
+	// Without this, gin answers a wrong-method request with 404, which reads
+	// as "no such endpoint" and sends clients hunting for a typo in the path.
+	router.HandleMethodNotAllowed = true
 	router.Use(
 		middleware.RequestID(),
 		middleware.Recovery(deps.Logger),
