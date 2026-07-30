@@ -1,0 +1,17 @@
+# Binaries
+/bin/
+/tmp/
+hospital-middleware
+
+# Env / secrets
+.env
+*.local
+
+# Test output
+coverage.out
+coverage.html
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
