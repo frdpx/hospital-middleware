@@ -4,9 +4,12 @@
 
 ```
 .
+├── .github/workflows/ci.yml     fmt, vet, race tests, govulncheck, migrations
+│                                against a real Postgres, both image builds
 ├── cmd/
 │   ├── api/main.go              composition root — the only file that knows
 │   │                            about concrete implementations
+│   ├── migrate/main.go          apply or roll back migrations deliberately
 │   └── mockhis/main.go          standalone mock of the Hospital A HIS
 ├── internal/
 │   ├── apierr/                  the one error type that carries HTTP status +
@@ -21,7 +24,10 @@
 │   ├── models/                  domain types (no JSON-of-convenience, no SQL)
 │   ├── repository/              every SQL statement in the service
 │   ├── service/                 business rules; depends only on interfaces
-│   └── testutil/                behavioural in-memory repo fakes for tests
+│   └── testutil/                every test double: in-memory repositories and
+│                                the fake HIS. Nothing here is linked into
+│                                cmd/api — a production package should not
+│                                export its own fakes
 ├── migrations/                  numbered SQL files, embedded into the binary
 ├── deploy/nginx/                reverse-proxy config
 ├── docs/
@@ -115,8 +121,17 @@ applied by `golang-migrate` on API startup (`DB_AUTO_MIGRATE=true`).
   no risk of running SQL from a different build than the code.
 - golang-migrate takes a Postgres advisory lock, so several API replicas
   starting together still apply each migration exactly once.
-- Set `DB_AUTO_MIGRATE=false` and run migrations as a separate step if your
-  environment requires a human-gated schema change.
+- Set `DB_AUTO_MIGRATE=false` and use `cmd/migrate` if your environment
+  requires a human-gated schema change:
+
+  ```bash
+  go run ./cmd/migrate                    # apply
+  go run ./cmd/migrate -direction down    # roll back
+  ```
+
+- CI runs up → down → up against a real Postgres. That is the only check that
+  the SQL — in *both* directions — is valid; the unit tests never touch a
+  database.
 
 Reasoning and the alternatives considered:
 [ADR-0005](adr/0005-embedded-migrations-on-startup.md).

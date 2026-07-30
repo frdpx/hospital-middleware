@@ -53,6 +53,7 @@ exactly this shape. Clients branch on `code`, never on `message`.
 | `ROUTE_NOT_FOUND` | 404 | unknown path |
 | `METHOD_NOT_ALLOWED` | 405 | known path, wrong verb |
 | `USERNAME_TAKEN` | 409 | `/staff/create` |
+| `PATIENT_IDENTIFIER_CONFLICT` | 409 | `/patient/search` — the HIS returned an identifier already held by a different patient |
 | `RATE_LIMITED` | 429 | all endpoints — emitted by nginx |
 | `INTERNAL_ERROR` | 500 | all endpoints |
 | `HIS_UNAVAILABLE` | 502 | `/patient/search` |
@@ -218,7 +219,7 @@ blank (`""` or whitespace) are treated as absent.
 |---|---|---|
 | `national_id` | string | exact |
 | `passport_id` | string | exact |
-| `first_name` | string | case-insensitive substring, against **either** `first_name_th` or `first_name_en` |
+| `first_name` | string | case-insensitive substring, against **either** `first_name_th` or `first_name_en`. Minimum 2 characters |
 | `middle_name` | string | as above |
 | `last_name` | string | as above |
 | `date_of_birth` | `YYYY-MM-DD` | exact |
@@ -280,10 +281,15 @@ another hospital returns a different `patient_hn`.
 
 | Status | Code | Scenario |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | no search fields supplied, or `date_of_birth` is not `YYYY-MM-DD` |
+| 400 | `VALIDATION_ERROR` | no search fields supplied, `date_of_birth` is not `YYYY-MM-DD`, or a name filter is shorter than 2 characters |
 | 401 | `UNAUTHORIZED` | token missing, malformed, expired, wrongly signed, or carrying no hospital scope |
 | 404 | `PATIENT_NOT_FOUND` | identifier search found nothing locally or at the HIS |
+| 409 | `PATIENT_IDENTIFIER_CONFLICT` | the HIS returned an identifier that already belongs to a different patient — two upstream systems disagree and a human must reconcile them |
 | 502 | `HIS_UNAVAILABLE` | HIS timed out, refused the connection, returned 5xx, or returned an unusable body |
+
+A name filter must be at least **2 characters** (counted as characters, not
+bytes, so Thai works the same as Latin). Name matching is a substring match,
+so a single character would return most of the hospital's roster.
 
 ### Example
 

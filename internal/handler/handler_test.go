@@ -19,7 +19,6 @@ import (
 	"github.com/bambam/hospital-middleware/internal/auth"
 	"github.com/bambam/hospital-middleware/internal/config"
 	"github.com/bambam/hospital-middleware/internal/handler"
-	"github.com/bambam/hospital-middleware/internal/hisclient"
 	"github.com/bambam/hospital-middleware/internal/models"
 	"github.com/bambam/hospital-middleware/internal/service"
 	"github.com/bambam/hospital-middleware/internal/testutil"
@@ -41,7 +40,7 @@ type testServer struct {
 	tokens   *auth.TokenManager
 	staff    *testutil.StaffRepo
 	patients *testutil.PatientRepo
-	his      *hisclient.FakeClient
+	his      *testutil.FakeHIS
 }
 
 func newTestServer(t *testing.T) *testServer {
@@ -55,7 +54,7 @@ func newTestServer(t *testing.T) *testServer {
 	)
 	staffRepo := testutil.NewStaffRepo()
 	patientRepo := testutil.NewPatientRepo()
-	fakeHIS := hisclient.NewFakeClient()
+	fakeHIS := testutil.NewFakeHIS()
 
 	tokens := auth.NewTokenManager(config.JWTConfig{
 		Secret: "test-secret-that-is-long-enough-32b",
@@ -64,7 +63,7 @@ func newTestServer(t *testing.T) *testServer {
 	})
 
 	staffService := service.NewStaffService(hospitals, staffRepo, tokens).WithBcryptCost(bcrypt.MinCost)
-	patientService := service.NewPatientService(hospitals, patientRepo, hisclient.NewFakeFactory(fakeHIS), logger)
+	patientService := service.NewPatientService(hospitals, patientRepo, testutil.NewFakeHISFactory(fakeHIS), logger)
 
 	router := handler.NewRouter(handler.RouterDeps{
 		Staff:    handler.NewStaffHandler(staffService, logger),
@@ -180,6 +179,29 @@ func TestRouter_HealthAndReadiness(t *testing.T) {
 		recorder := server.do(t, http.MethodGet, path, nil, "")
 		require.Equal(t, http.StatusOK, recorder.Code, path)
 	}
+}
+
+// A panic must become our error envelope, not a dropped connection and not
+// gin's default output. This is the one middleware whose failure is invisible
+// until it is needed, so it gets an explicit test.
+func TestRouter_RecoversFromAPanic(t *testing.T) {
+	t.Parallel()
+
+	server := newTestServer(t)
+	server.router.GET("/boom", func(*gin.Context) {
+		panic("something went very wrong")
+	})
+
+	recorder := server.do(t, http.MethodGet, "/boom", nil, "")
+
+	require.Equal(t, http.StatusInternalServerError, recorder.Code)
+	require.Equal(t, "INTERNAL_ERROR", errorCode(t, recorder))
+	// The panic value describes our internals; it must not reach the client.
+	require.NotContains(t, recorder.Body.String(), "something went very wrong")
+
+	// The router must still serve other requests afterwards.
+	after := server.do(t, http.MethodGet, "/healthz", nil, "")
+	require.Equal(t, http.StatusOK, after.Code)
 }
 
 func TestRouter_UnknownRouteAndMethod(t *testing.T) {

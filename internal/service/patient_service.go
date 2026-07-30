@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -50,6 +52,9 @@ func (s *PatientService) Search(ctx context.Context, criteria models.PatientSear
 	}
 	if criteria.IsEmpty() {
 		return nil, apierr.Validation("at least one search field is required")
+	}
+	if err := validateNameFilters(criteria); err != nil {
+		return nil, err
 	}
 
 	records, err := s.patients.Search(ctx, criteria)
@@ -100,6 +105,34 @@ func (s *PatientService) Search(ctx context.Context, criteria models.PatientSear
 		return nil, apierr.PatientNotFound()
 	}
 	return records, nil
+}
+
+// minNameFilterLength is counted in runes, not bytes: a Thai character is
+// three bytes, so a byte-based check would reject "สม" while accepting "ab".
+const minNameFilterLength = 2
+
+// validateNameFilters rejects name fragments too short to be a search.
+//
+// Name matching is a substring match, so a one-character filter matches most of
+// the hospital's roster and turns the endpoint into a bulk export of patient
+// records — complete with national ids — up to the result limit. Requiring two
+// characters costs legitimate users nothing and removes the single-character
+// enumeration case entirely.
+func validateNameFilters(criteria models.PatientSearchCriteria) error {
+	filters := map[string]*string{
+		"first_name":  criteria.FirstName,
+		"middle_name": criteria.MiddleName,
+		"last_name":   criteria.LastName,
+	}
+	// Iterated in a fixed order so the reported field is deterministic.
+	for _, field := range []string{"first_name", "middle_name", "last_name"} {
+		value := filters[field]
+		if value != nil && utf8.RuneCountInString(*value) < minNameFilterLength {
+			return apierr.Validation(fmt.Sprintf(
+				"%s must be at least %d characters to search by name", field, minNameFilterLength))
+		}
+	}
+	return nil
 }
 
 // syncFromHIS fetches the patient from the hospital's own HIS and stores them.

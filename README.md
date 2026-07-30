@@ -88,10 +88,15 @@ go run ./cmd/api                             # migrations run on startup
 ## Tests
 
 ```bash
-make test          # 188 cases, ~4s, no database or Docker required
+make test          # ~210 cases, a few seconds, no database or Docker required
+make test-race     # the same suite under the race detector (what CI runs)
 make test-cover    # per-function coverage
-make check         # fmt + vet + test — run before committing
+make check         # fmt + vet + race tests — run before committing
 ```
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) additionally runs
+`govulncheck`, applies **and rolls back** the migrations against a real
+Postgres, builds both images, and validates the compose file and `nginx.conf`.
 
 Coverage on the layers that matter (measured with `-coverpkg=./internal/...`):
 
@@ -189,7 +194,15 @@ client ──► nginx ──► Go API ──► PostgreSQL
   those go to the structured logs only.
 - Access logs deliberately record no request bodies or query strings — they
   would contain national ids and patient names.
-- The service runs as a non-root user in a static, multi-stage-built image.
+- The service runs as a non-root user in a static, multi-stage-built image, and
+  the mock HIS is built as a separate image target so no development stand-in
+  exists inside the production one.
+- Name searches require at least 2 characters, so the substring match cannot be
+  used to page through the hospital's roster one letter at a time.
+- **There is no TLS anywhere in this stack.** nginx terminates plain HTTP and is
+  meant to sit behind a load balancer or ingress that terminates TLS. Exposing
+  port 80 directly to a network you do not control would put JWTs and patient
+  data on the wire in clear text.
 - **`/staff/create` is unauthenticated** so the assignment is demonstrable end
   to end. This is the one deliberate deviation from what production should do,
   and it is argued explicitly in

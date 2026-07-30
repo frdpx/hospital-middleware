@@ -1,21 +1,24 @@
-package hisclient
+package testutil
 
 import (
 	"context"
 	"sync"
 
+	"github.com/bambam/hospital-middleware/internal/hisclient"
 	"github.com/bambam/hospital-middleware/internal/models"
 )
 
-// FakeClient is an in-memory HISClient for tests. It lives in the production
-// package (not a _test.go file) on purpose, so that the service and handler
-// test suites can reuse it instead of each rolling their own stub.
-type FakeClient struct {
+// FakeHIS is an in-memory hisclient.HISClient for tests.
+//
+// It lives here rather than in the hisclient package so that no test double is
+// exported from — or compiled into — production code; cmd/api links hisclient,
+// and a package's public API should not advertise fakes.
+type FakeHIS struct {
 	mu sync.Mutex
 
 	// Profiles is keyed by identifier; register the same profile under both
 	// its national id and its passport id to mimic a real HIS.
-	Profiles map[string]*PatientProfile
+	Profiles map[string]*hisclient.PatientProfile
 	// Err, when set, is returned by every call — used to exercise the
 	// HIS_UNAVAILABLE path.
 	Err error
@@ -24,12 +27,12 @@ type FakeClient struct {
 	Calls []string
 }
 
-func NewFakeClient() *FakeClient {
-	return &FakeClient{Profiles: map[string]*PatientProfile{}}
+func NewFakeHIS() *FakeHIS {
+	return &FakeHIS{Profiles: map[string]*hisclient.PatientProfile{}}
 }
 
 // Add registers a profile under each of its non-nil identifiers.
-func (f *FakeClient) Add(profile *PatientProfile) {
+func (f *FakeHIS) Add(profile *hisclient.PatientProfile) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if profile.Patient.NationalID != nil {
@@ -40,7 +43,7 @@ func (f *FakeClient) Add(profile *PatientProfile) {
 	}
 }
 
-func (f *FakeClient) FetchPatientByID(_ context.Context, id string) (*PatientProfile, error) {
+func (f *FakeHIS) FetchPatientByID(_ context.Context, id string) (*hisclient.PatientProfile, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -50,30 +53,30 @@ func (f *FakeClient) FetchPatientByID(_ context.Context, id string) (*PatientPro
 	}
 	profile, ok := f.Profiles[id]
 	if !ok {
-		return nil, ErrPatientNotFound
+		return nil, hisclient.ErrPatientNotFound
 	}
 	return profile, nil
 }
 
 // CallCount reports how many times the HIS was queried.
-func (f *FakeClient) CallCount() int {
+func (f *FakeHIS) CallCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.Calls)
 }
 
-// FakeFactory hands the same FakeClient to every hospital. Set Err to simulate
+// FakeHISFactory hands the same FakeHIS to every hospital. Set Err to simulate
 // a hospital whose HIS adapter cannot be resolved at all.
-type FakeFactory struct {
-	Client HISClient
+type FakeHISFactory struct {
+	Client hisclient.HISClient
 	Err    error
 }
 
-func NewFakeFactory(client HISClient) *FakeFactory {
-	return &FakeFactory{Client: client}
+func NewFakeHISFactory(client hisclient.HISClient) *FakeHISFactory {
+	return &FakeHISFactory{Client: client}
 }
 
-func (f *FakeFactory) ClientFor(_ models.Hospital) (HISClient, error) {
+func (f *FakeHISFactory) ClientFor(_ models.Hospital) (hisclient.HISClient, error) {
 	if f.Err != nil {
 		return nil, f.Err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
 	"regexp"
 	"testing"
 	"time"
@@ -322,6 +323,8 @@ func TestPatientRepository_UpsertFromHIS(t *testing.T) {
 		mock.ExpectBegin()
 		mock.ExpectQuery(`SELECT id FROM patients`).
 			WillReturnError(sql.ErrNoRows)
+		mock.ExpectExec(`SAVEPOINT before_patient_insert`).
+			WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectQuery(`INSERT INTO patients`).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(patientID))
 		mock.ExpectExec(`INSERT INTO hospital_patients .* ON CONFLICT \(hospital_id, patient_id\)`).
@@ -406,6 +409,8 @@ func TestPatientRepository_UpsertFromHIS(t *testing.T) {
 		db, mock := newMockDB(t)
 		mock.ExpectBegin()
 		mock.ExpectQuery(`SELECT id FROM patients`).WillReturnError(sql.ErrNoRows)
+		mock.ExpectExec(`SAVEPOINT before_patient_insert`).
+			WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectQuery(`INSERT INTO patients`).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(patientID))
 		mock.ExpectExec(`INSERT INTO hospital_patients`).
@@ -416,6 +421,82 @@ func TestPatientRepository_UpsertFromHIS(t *testing.T) {
 
 		require.Error(t, err)
 		assert.Equal(t, apierr.CodeInternal, apierr.From(err).Code)
+	})
+
+	// Two staff searching for the same new patient at the same moment both see
+	// "not found" and both try to INSERT. One loses. That is normal under load,
+	// so it must resolve into a merge — not a 500 for whoever was slower.
+	t.Run("losing the insert race merges into the winner", func(t *testing.T) {
+		t.Parallel()
+
+		db, mock := newMockDB(t)
+		mock.ExpectBegin()
+		mock.ExpectQuery(`SELECT id FROM patients`).WillReturnError(sql.ErrNoRows)
+		mock.ExpectExec(`SAVEPOINT before_patient_insert`).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectQuery(`INSERT INTO patients`).
+			WillReturnError(uniqueViolation("ux_patients_national_id"))
+		// A failed statement poisons the transaction in Postgres, so the
+		// attempt must be rewound before anything else can run.
+		mock.ExpectExec(`ROLLBACK TO SAVEPOINT before_patient_insert`).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectQuery(`SELECT id FROM patients`).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(patientID))
+		mock.ExpectExec(`UPDATE patients SET`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`INSERT INTO hospital_patients`).
+			WithArgs(hospitalAID, patientID, "HN00123").
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit()
+
+		err := repository.NewPatientRepository(db).UpsertFromHIS(context.Background(), hospitalAID, profile)
+
+		require.NoError(t, err, "a lost race is expected under load, not a failure")
+	})
+
+	// Distinct from the race: the identifier belongs to a *different* person
+	// already on file, so two upstream systems disagree. A human must resolve
+	// that, and a 409 says so where a 500 says nothing.
+	t.Run("an identifier owned by a different patient is a conflict, not a 500", func(t *testing.T) {
+		t.Parallel()
+
+		db, mock := newMockDB(t)
+		mock.ExpectBegin()
+		mock.ExpectQuery(`SELECT id FROM patients`).WillReturnError(sql.ErrNoRows)
+		mock.ExpectExec(`SAVEPOINT before_patient_insert`).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectQuery(`INSERT INTO patients`).
+			WillReturnError(uniqueViolation("ux_patients_passport_id"))
+		mock.ExpectExec(`ROLLBACK TO SAVEPOINT before_patient_insert`).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		// The re-lookup finds nothing: the clash was on an identifier we did
+		// not search by.
+		mock.ExpectQuery(`SELECT id FROM patients`).WillReturnError(sql.ErrNoRows)
+		mock.ExpectRollback()
+
+		err := repository.NewPatientRepository(db).UpsertFromHIS(context.Background(), hospitalAID, profile)
+
+		require.Error(t, err)
+		apiErr := apierr.From(err)
+		assert.Equal(t, apierr.CodeIdentifierConflict, apiErr.Code)
+		assert.Equal(t, http.StatusConflict, apiErr.Status)
+	})
+
+	t.Run("an update that collides with another patient is also a conflict", func(t *testing.T) {
+		t.Parallel()
+
+		db, mock := newMockDB(t)
+		mock.ExpectBegin()
+		mock.ExpectQuery(`SELECT id FROM patients`).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(patientID))
+		mock.ExpectExec(`UPDATE patients SET`).
+			WillReturnError(uniqueViolation("ux_patients_national_id"))
+		mock.ExpectRollback()
+
+		err := repository.NewPatientRepository(db).UpsertFromHIS(context.Background(), hospitalAID, profile)
+
+		require.Error(t, err)
+		assert.Equal(t, apierr.CodeIdentifierConflict, apierr.From(err).Code)
 	})
 
 	t.Run("a transaction that cannot start is an internal error", func(t *testing.T) {

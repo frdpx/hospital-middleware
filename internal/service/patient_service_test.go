@@ -36,15 +36,15 @@ func somchai() models.Patient {
 }
 
 // newPatientService wires the service with in-memory repos and a fake HIS.
-func newPatientService(t *testing.T) (*service.PatientService, *testutil.PatientRepo, *hisclient.FakeClient) {
+func newPatientService(t *testing.T) (*service.PatientService, *testutil.PatientRepo, *testutil.FakeHIS) {
 	t.Helper()
 
 	patientRepo := testutil.NewPatientRepo()
-	fakeHIS := hisclient.NewFakeClient()
+	fakeHIS := testutil.NewFakeHIS()
 	svc := service.NewPatientService(
 		testutil.NewHospitalRepo(testHospitals()...),
 		patientRepo,
-		hisclient.NewFakeFactory(fakeHIS),
+		testutil.NewFakeHISFactory(fakeHIS),
 		discardLogger(),
 	)
 	return svc, patientRepo, fakeHIS
@@ -135,6 +135,75 @@ func TestPatientService_Search_Rejections(t *testing.T) {
 			assert.Nil(t, records)
 			require.Error(t, err)
 			assert.Equal(t, tc.wantCode, apierr.From(err).Code)
+		})
+	}
+}
+
+// Name matching is a substring match, so a one-character filter would return
+// most of the hospital's roster — national ids included — up to the result
+// limit. The length is counted in runes: a Thai character is three bytes, and a
+// byte-based check would reject "สม" while happily accepting "ab".
+func TestPatientService_Search_RejectsTooShortNameFilters(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		criteria models.PatientSearchCriteria
+		wantErr  bool
+	}{
+		{
+			name:     "single latin character",
+			criteria: models.PatientSearchCriteria{LastName: testutil.Ptr("a")},
+			wantErr:  true,
+		},
+		{
+			name:     "single thai character",
+			criteria: models.PatientSearchCriteria{FirstName: testutil.Ptr("ส")},
+			wantErr:  true,
+		},
+		{
+			name:     "single character in a middle name",
+			criteria: models.PatientSearchCriteria{MiddleName: testutil.Ptr("x")},
+			wantErr:  true,
+		},
+		{
+			name:     "two latin characters are allowed",
+			criteria: models.PatientSearchCriteria{LastName: testutil.Ptr("ja")},
+		},
+		{
+			name:     "two thai characters are allowed, not treated as six bytes",
+			criteria: models.PatientSearchCriteria{FirstName: testutil.Ptr("สม")},
+		},
+		{
+			name:     "the limit applies to names only, not to identifiers",
+			criteria: models.PatientSearchCriteria{NationalID: testutil.Ptr("1")},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc, repo, fakeHIS := newPatientService(t)
+			repo.Seed(hospitalAID, "HN00123", somchai())
+			fakeHIS.Err = hisclient.ErrPatientNotFound // identifier lookups may miss
+
+			criteria := tc.criteria
+			criteria.HospitalID = hospitalAID
+
+			_, err := svc.Search(context.Background(), criteria)
+
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.Equal(t, apierr.CodeValidation, apierr.From(err).Code)
+				assert.Contains(t, apierr.From(err).Message, "at least 2 characters")
+				return
+			}
+			// Anything but a validation error is fine here; these cases are
+			// only asserting that the length gate lets them through.
+			if err != nil {
+				assert.NotEqual(t, apierr.CodeValidation, apierr.From(err).Code)
+			}
 		})
 	}
 }
@@ -258,7 +327,7 @@ func TestPatientService_Search_HISFailures(t *testing.T) {
 func TestPatientService_Search_NoHISAdapterConfigured(t *testing.T) {
 	t.Parallel()
 
-	factory := hisclient.NewFakeFactory(hisclient.NewFakeClient())
+	factory := testutil.NewFakeHISFactory(testutil.NewFakeHIS())
 	factory.Err = errors.New("no adapter for hospital")
 
 	svc := service.NewPatientService(

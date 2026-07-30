@@ -19,6 +19,7 @@ const (
 	CodeHospitalNotFound   = "HOSPITAL_NOT_FOUND"
 	CodePatientNotFound    = "PATIENT_NOT_FOUND"
 	CodeUsernameTaken      = "USERNAME_TAKEN"
+	CodeIdentifierConflict = "PATIENT_IDENTIFIER_CONFLICT"
 	CodeHISUnavailable     = "HIS_UNAVAILABLE"
 	CodeInternal           = "INTERNAL_ERROR"
 )
@@ -83,6 +84,15 @@ func PatientNotFound() *Error {
 
 func UsernameTaken() *Error {
 	return newError(http.StatusConflict, CodeUsernameTaken, "username already exists for this hospital")
+}
+
+// IdentifierConflict reports that the HIS returned an identifier already held
+// by a different canonical patient. That is a genuine data conflict between two
+// upstream systems, not a bug on our side, so it is a 409 a human can act on
+// rather than an opaque 500.
+func IdentifierConflict() *Error {
+	return newError(http.StatusConflict, CodeIdentifierConflict,
+		"the hospital information system returned an identifier that already belongs to a different patient")
 }
 
 func HISUnavailable() *Error {

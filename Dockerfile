@@ -15,19 +15,34 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api && \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/mockhis ./cmd/mockhis
 
-# ---------- runtime stage ----------
-FROM alpine:3.20
+# ---------- shared runtime base ----------
+FROM alpine:3.20 AS runtime
 
 # ca-certificates for outbound HTTPS to the HIS; tzdata so timestamps are not
 # stuck in UTC-only; wget (busybox) backs the container healthcheck.
 RUN apk add --no-cache ca-certificates tzdata && \
     adduser -D -u 10001 appuser
 
-COPY --from=builder /out/api /usr/local/bin/api
+# Never run as root: a container escape should not start as uid 0.
+USER appuser
+
+# ---------- mock HIS (development only, `--target mockhis`) ----------
+# Built as its own image so the development stand-in is not present in — and
+# cannot be started from — the image that runs in production.
+FROM runtime AS mockhis
+
 COPY --from=builder /out/mockhis /usr/local/bin/mockhis
 
-# Never run the service as root: a container escape should not start as uid 0.
-USER appuser
+EXPOSE 9090
+HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
+    CMD wget --quiet --spider http://127.0.0.1:9090/healthz || exit 1
+
+ENTRYPOINT ["/usr/local/bin/mockhis"]
+
+# ---------- API (default target) ----------
+FROM runtime AS api
+
+COPY --from=builder /out/api /usr/local/bin/api
 
 EXPOSE 8080
 

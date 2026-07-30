@@ -24,11 +24,23 @@ run: ## Run the API against a locally reachable Postgres
 test: ## Run all unit tests
 	go test $(PKG) -count=1
 
+test-race: ## Run all unit tests under the race detector (what CI runs)
+	go test $(PKG) -count=1 -race
+
 test-cover: ## Run tests and print per-package coverage
-	go test $(PKG) -count=1 -coverprofile=coverage.out
+	go test $(PKG) -count=1 -coverprofile=coverage.out -coverpkg=./internal/...
 	go tool cover -func=coverage.out | tail -20
 
-check: fmt vet test ## Format, vet and test — run this before committing
+vulncheck: ## Report vulnerabilities our code actually reaches
+	go run golang.org/x/vuln/cmd/govulncheck@latest $(PKG)
+
+migrate: ## Apply migrations against a reachable Postgres
+	go run ./cmd/migrate
+
+migrate-down: ## Roll migrations back
+	go run ./cmd/migrate -direction down
+
+check: fmt vet test-race ## Format, vet and race-test — run this before committing
 
 up: ## Start nginx + api + postgres
 	docker compose up -d --build

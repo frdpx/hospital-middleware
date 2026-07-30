@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch cancels the older run; there is no value in
+# finishing CI for a commit nobody will merge.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # Single source of truth: the toolchain follows go.mod, so CI can
+          # never silently test against a different Go than the Dockerfile.
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -s -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: build
+        run: go build ./...
+
+      # -race is the point of this step: the repositories and fakes are shared
+      # across parallel tests, and a data race there would otherwise only show
+      # up as a flake in production.
+      - name: test
+        run: go test ./... -race -count=1 -coverprofile=coverage.out -coverpkg=./internal/...
+
+      - name: coverage summary
+        run: go tool cover -func=coverage.out | tail -1
+
+  vulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # Fails only on vulnerabilities our code actually reaches, not on every
+      # CVE anywhere in the module graph.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  migrations:
+    name: migrations apply cleanly
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hospital
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: hospital_middleware
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hospital"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # The unit tests never touch a real database, so this is the only place
+      # the SQL itself is proven to be valid Postgres. up/down/up also proves
+      # the .down.sql files work, which nothing else exercises.
+      - name: apply, roll back and re-apply migrations
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PASSWORD: ci_password
+          JWT_SECRET: ci-secret-that-is-at-least-32-characters
+        run: |
+          go run ./cmd/migrate -direction up
+          go run ./cmd/migrate -direction down
+          go run ./cmd/migrate -direction up
+
+  docker:
+    name: docker images build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: build the API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: api
+          push: false
+      - name: build the mock HIS image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: mockhis
+          push: false
+      - name: validate the compose file and nginx config
+        run: |
+          cp .env.example .env
+          sed -i 's|^JWT_SECRET=.*|JWT_SECRET=ci-secret-that-is-at-least-32-characters|' .env
+          docker compose --profile dev config --quiet
+          docker run --rm \
+            -v "$PWD/deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$PWD/deploy/nginx/proxy_params.conf:/etc/nginx/conf.d/proxy_params.conf:ro" \
+            nginx:1.27-alpine nginx -t

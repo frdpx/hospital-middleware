@@ -99,6 +99,24 @@ func TestLoad_Rejections(t *testing.T) {
 			mutate:  func(env map[string]string) { env["HIS_TIMEOUT"] = "-1s" },
 			wantMsg: "HIS_TIMEOUT must be positive",
 		},
+		// A set-but-malformed value is an operator mistake. Silently falling
+		// back to the default would hide it until something behaved oddly in
+		// production, so it fails at startup instead.
+		{
+			name:    "duration missing its unit",
+			mutate:  func(env map[string]string) { env["JWT_TTL"] = "1hour" },
+			wantMsg: `JWT_TTL="1hour" is not a valid duration`,
+		},
+		{
+			name:    "non-numeric pool size",
+			mutate:  func(env map[string]string) { env["DB_MAX_OPEN_CONNS"] = "twenty" },
+			wantMsg: `DB_MAX_OPEN_CONNS="twenty" is not a valid integer`,
+		},
+		{
+			name:    "non-boolean migration flag",
+			mutate:  func(env map[string]string) { env["DB_AUTO_MIGRATE"] = "yes-please" },
+			wantMsg: `DB_AUTO_MIGRATE="yes-please" is not a valid boolean`,
+		},
 	}
 
 	for _, tc := range tests {
@@ -120,6 +138,23 @@ func TestLoad_Rejections(t *testing.T) {
 			assert.Contains(t, err.Error(), tc.wantMsg)
 		})
 	}
+}
+
+// Every problem should be reported in one pass, so a misconfigured deployment
+// is fixed in one edit rather than one restart per mistake.
+func TestLoad_ReportsEveryProblemAtOnce(t *testing.T) {
+	env := validEnv()
+	env["JWT_TTL"] = "1hour"
+	env["HIS_TIMEOUT"] = "soon"
+	env["DB_MAX_OPEN_CONNS"] = "lots"
+	withEnv(t, env)
+
+	_, err := config.Load()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "JWT_TTL")
+	assert.Contains(t, err.Error(), "HIS_TIMEOUT")
+	assert.Contains(t, err.Error(), "DB_MAX_OPEN_CONNS")
 }
 
 func TestDBConfig_DSN_EscapesCredentials(t *testing.T) {

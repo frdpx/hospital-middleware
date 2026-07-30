@@ -134,6 +134,19 @@ func (r *PatientRepository) UpsertFromHIS(ctx context.Context, hospitalID uuid.U
 	return nil
 }
 
+// patientIdentifierConstraints are the two partial unique indexes that keep one
+// canonical row per government identifier.
+var patientIdentifierConstraints = []string{"ux_patients_national_id", "ux_patients_passport_id"}
+
+func isIdentifierConflict(err error) bool {
+	for _, constraint := range patientIdentifierConstraints {
+		if isUniqueViolation(err, constraint) {
+			return true
+		}
+	}
+	return false
+}
+
 // upsertPatient finds the canonical person by either identifier and updates
 // them, or inserts a new row.
 //
@@ -141,21 +154,61 @@ func (r *PatientRepository) UpsertFromHIS(ctx context.Context, hospitalID uuid.U
 // *partial* unique indexes (national_id, passport_id) and a record may collide
 // on either, which a single conflict target cannot express.
 func upsertPatient(ctx context.Context, tx Querier, patient models.Patient) (uuid.UUID, error) {
-	const findQuery = `
+	existingID, found, err := findPatientByIdentifier(ctx, tx, patient)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if found {
+		return existingID, updatePatient(ctx, tx, existingID, patient)
+	}
+
+	// In Postgres a failed statement poisons the whole transaction, so the
+	// INSERT is fenced by a savepoint we can roll back to and carry on from.
+	if _, err := tx.ExecContext(ctx, "SAVEPOINT before_patient_insert"); err != nil {
+		return uuid.Nil, apierr.Internal().WithCause(err)
+	}
+
+	id, err := insertPatient(ctx, tx, patient)
+	if !isIdentifierConflict(err) {
+		return id, err
+	}
+
+	// We lost a race: between our SELECT and our INSERT, a concurrent search
+	// for the same patient created the row. That is expected under load, not a
+	// failure — rewind to the savepoint and merge into the winner instead.
+	if _, rollbackErr := tx.ExecContext(ctx, "ROLLBACK TO SAVEPOINT before_patient_insert"); rollbackErr != nil {
+		return uuid.Nil, apierr.Internal().WithCause(rollbackErr)
+	}
+
+	existingID, found, findErr := findPatientByIdentifier(ctx, tx, patient)
+	if findErr != nil {
+		return uuid.Nil, findErr
+	}
+	if !found {
+		// The conflict was on an identifier we did not search by, i.e. this
+		// person's national_id already belongs to a different patient row.
+		// Two upstream systems disagree; a human has to resolve it.
+		return uuid.Nil, apierr.IdentifierConflict().WithCause(err)
+	}
+	return existingID, updatePatient(ctx, tx, existingID, patient)
+}
+
+func findPatientByIdentifier(ctx context.Context, tx Querier, patient models.Patient) (uuid.UUID, bool, error) {
+	const query = `
 		SELECT id FROM patients
 		WHERE ($1::text IS NOT NULL AND national_id = $1)
 		   OR ($2::text IS NOT NULL AND passport_id = $2)
 		LIMIT 1`
 
-	var existingID uuid.UUID
-	err := tx.QueryRowContext(ctx, findQuery, patient.NationalID, patient.PassportID).Scan(&existingID)
+	var id uuid.UUID
+	err := tx.QueryRowContext(ctx, query, patient.NationalID, patient.PassportID).Scan(&id)
 	switch {
 	case err == nil:
-		return existingID, updatePatient(ctx, tx, existingID, patient)
+		return id, true, nil
 	case errors.Is(err, sql.ErrNoRows):
-		return insertPatient(ctx, tx, patient)
+		return uuid.Nil, false, nil
 	default:
-		return uuid.Nil, apierr.Internal().WithCause(err)
+		return uuid.Nil, false, apierr.Internal().WithCause(err)
 	}
 }
 
@@ -176,7 +229,11 @@ func insertPatient(ctx context.Context, tx Querier, patient models.Patient) (uui
 		patient.FirstNameEN, patient.MiddleNameEN, patient.LastNameEN,
 		patient.DateOfBirth, patient.PhoneNumber, patient.Email, patient.Gender,
 	).Scan(&id)
-	if err != nil {
+	switch {
+	case isIdentifierConflict(err):
+		// Returned raw so the caller can tell a lost race from a real failure.
+		return uuid.Nil, err
+	case err != nil:
 		return uuid.Nil, apierr.Internal().WithCause(err)
 	}
 	return id, nil
@@ -221,7 +278,14 @@ func updatePatient(ctx context.Context, tx Querier, id uuid.UUID, patient models
 		patient.FirstNameEN, patient.MiddleNameEN, patient.LastNameEN,
 		patient.DateOfBirth, patient.PhoneNumber, patient.Email, patient.Gender,
 	)
-	if err != nil {
+	switch {
+	case isIdentifierConflict(err):
+		// The incoming record carries an identifier that already belongs to a
+		// different canonical patient — two upstream systems disagree about who
+		// this person is. A 409 tells an operator that; a 500 tells them
+		// nothing.
+		return apierr.IdentifierConflict().WithCause(err)
+	case err != nil:
 		return apierr.Internal().WithCause(err)
 	}
 	return nil

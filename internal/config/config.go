@@ -73,46 +73,47 @@ type HISConfig struct {
 }
 
 // Load reads configuration from the environment and validates it. It returns
-// every validation problem at once rather than failing on the first, so a
-// misconfigured deployment can be fixed in one pass.
+// every problem at once rather than failing on the first, so a misconfigured
+// deployment can be fixed in one pass.
 func Load() (*Config, error) {
+	env := &reader{}
+
 	cfg := &Config{
 		App: AppConfig{
-			Env:      getString("APP_ENV", "development"),
-			Port:     getString("APP_PORT", "8080"),
-			LogLevel: getString("APP_LOG_LEVEL", "info"),
+			Env:      env.str("APP_ENV", "development"),
+			Port:     env.str("APP_PORT", "8080"),
+			LogLevel: env.str("APP_LOG_LEVEL", "info"),
 		},
 		DB: DBConfig{
-			Host:            getString("POSTGRES_HOST", "localhost"),
-			Port:            getString("POSTGRES_PORT", "5432"),
-			User:            getString("POSTGRES_USER", "hospital"),
-			Password:        getString("POSTGRES_PASSWORD", ""),
-			Name:            getString("POSTGRES_DB", "hospital_middleware"),
-			SSLMode:         getString("POSTGRES_SSLMODE", "disable"),
-			MaxOpenConns:    getInt("DB_MAX_OPEN_CONNS", 25),
-			MaxIdleConns:    getInt("DB_MAX_IDLE_CONNS", 5),
-			ConnMaxLifetime: getDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
-			AutoMigrate:     getBool("DB_AUTO_MIGRATE", true),
+			Host:            env.str("POSTGRES_HOST", "localhost"),
+			Port:            env.str("POSTGRES_PORT", "5432"),
+			User:            env.str("POSTGRES_USER", "hospital"),
+			Password:        env.str("POSTGRES_PASSWORD", ""),
+			Name:            env.str("POSTGRES_DB", "hospital_middleware"),
+			SSLMode:         env.str("POSTGRES_SSLMODE", "disable"),
+			MaxOpenConns:    env.int("DB_MAX_OPEN_CONNS", 25),
+			MaxIdleConns:    env.int("DB_MAX_IDLE_CONNS", 5),
+			ConnMaxLifetime: env.duration("DB_CONN_MAX_LIFETIME", 30*time.Minute),
+			AutoMigrate:     env.boolean("DB_AUTO_MIGRATE", true),
 		},
 		JWT: JWTConfig{
-			Secret: getString("JWT_SECRET", ""),
-			Issuer: getString("JWT_ISSUER", "hospital-middleware"),
-			TTL:    getDuration("JWT_TTL", time.Hour),
+			Secret: env.str("JWT_SECRET", ""),
+			Issuer: env.str("JWT_ISSUER", "hospital-middleware"),
+			TTL:    env.duration("JWT_TTL", time.Hour),
 		},
 		HIS: HISConfig{
-			Timeout:         getDuration("HIS_TIMEOUT", 5*time.Second),
-			BaseURLOverride: getString("HIS_BASE_URL_OVERRIDE", ""),
+			Timeout:         env.duration("HIS_TIMEOUT", 5*time.Second),
+			BaseURLOverride: env.str("HIS_BASE_URL_OVERRIDE", ""),
 		},
 	}
 
-	if err := cfg.validate(); err != nil {
+	if err := cfg.validate(env.problems); err != nil {
 		return nil, err
 	}
 	return cfg, nil
 }
 
-func (c *Config) validate() error {
-	var problems []string
+func (c *Config) validate(problems []string) error {
 
 	if c.DB.Password == "" {
 		problems = append(problems, "POSTGRES_PASSWORD is required")
@@ -139,44 +140,71 @@ func (c *Config) validate() error {
 	return nil
 }
 
-func getString(key, fallback string) string {
-	if v, ok := os.LookupEnv(key); ok && v != "" {
+// reader pulls typed values out of the environment, accumulating a problem for
+// anything it cannot parse.
+//
+// An unset variable falls back silently — that is the documented default. A
+// variable that is *set but malformed* is an operator mistake, and silently
+// substituting the default would hide it: `JWT_TTL=1hour` would quietly become
+// one hour, and nobody would find out until a token behaved unexpectedly in
+// production. Those fail the process at startup instead.
+type reader struct {
+	problems []string
+}
+
+func (r *reader) rawValue(key string) (string, bool) {
+	v, ok := os.LookupEnv(key)
+	if !ok || v == "" {
+		return "", false
+	}
+	return v, true
+}
+
+func (r *reader) invalid(key, value, expected string) {
+	r.problems = append(r.problems, fmt.Sprintf("%s=%q is not a valid %s", key, value, expected))
+}
+
+func (r *reader) str(key, fallback string) string {
+	if v, ok := r.rawValue(key); ok {
 		return v
 	}
 	return fallback
 }
 
-func getInt(key string, fallback int) int {
-	v, ok := os.LookupEnv(key)
-	if !ok || v == "" {
+func (r *reader) int(key string, fallback int) int {
+	v, ok := r.rawValue(key)
+	if !ok {
 		return fallback
 	}
 	parsed, err := strconv.Atoi(v)
 	if err != nil {
+		r.invalid(key, v, "integer")
 		return fallback
 	}
 	return parsed
 }
 
-func getBool(key string, fallback bool) bool {
-	v, ok := os.LookupEnv(key)
-	if !ok || v == "" {
+func (r *reader) boolean(key string, fallback bool) bool {
+	v, ok := r.rawValue(key)
+	if !ok {
 		return fallback
 	}
 	parsed, err := strconv.ParseBool(v)
 	if err != nil {
+		r.invalid(key, v, "boolean (true/false)")
 		return fallback
 	}
 	return parsed
 }
 
-func getDuration(key string, fallback time.Duration) time.Duration {
-	v, ok := os.LookupEnv(key)
-	if !ok || v == "" {
+func (r *reader) duration(key string, fallback time.Duration) time.Duration {
+	v, ok := r.rawValue(key)
+	if !ok {
 		return fallback
 	}
 	parsed, err := time.ParseDuration(v)
 	if err != nil {
+		r.invalid(key, v, `duration (e.g. "30s", "1h")`)
 		return fallback
 	}
 	return parsed

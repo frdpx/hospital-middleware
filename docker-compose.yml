@@ -33,6 +33,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: api
     restart: unless-stopped
     environment:
       APP_ENV: ${APP_ENV:-development}
@@ -87,13 +88,14 @@ services:
       start_period: 10s
     networks: [hospital_net]
 
-  # Stand-in for the Hospital A HIS. Only started with `--profile dev`.
+  # Stand-in for the Hospital A HIS. Only started with `--profile dev`, and
+  # built from its own image target so it never ships inside the API image.
   mockhis:
     profiles: ["dev"]
     build:
       context: .
       dockerfile: Dockerfile
-    entrypoint: ["/usr/local/bin/mockhis"]
+      target: mockhis
     restart: unless-stopped
     environment:
       MOCK_HIS_PORT: "9090"
