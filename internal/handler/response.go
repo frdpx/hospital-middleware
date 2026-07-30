@@ -6,12 +6,39 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"reflect"
+	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 
 	"github.com/bambam/hospital-middleware/internal/apierr"
 )
+
+var registerFieldNames sync.Once
+
+// useJSONFieldNames makes validation messages name the field the client
+// actually sent ("date_of_birth") rather than the Go struct field
+// ("DateOfBirth"), which would not appear anywhere in our API spec.
+//
+// gin keeps one process-wide validator, so this is guarded by a Once.
+func useJSONFieldNames() {
+	registerFieldNames.Do(func() {
+		validate, ok := binding.Validator.Engine().(*validator.Validate)
+		if !ok {
+			return
+		}
+		validate.RegisterTagNameFunc(func(field reflect.StructField) string {
+			name := strings.SplitN(field.Tag.Get("json"), ",", 2)[0]
+			if name == "" || name == "-" {
+				return field.Name
+			}
+			return name
+		})
+	})
+}
 
 // errorEnvelope is the single error shape every endpoint returns, so clients
 // write one error-handling branch instead of one per route.

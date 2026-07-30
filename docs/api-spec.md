@@ -36,9 +36,10 @@ exactly this shape. Clients branch on `code`, never on `message`.
 | `404` | hospital not found, patient not found, unknown route |
 | `405` | wrong method for a known path |
 | `409` | username already taken at that hospital |
-| `429` | rate limited by nginx (10 req/min on the credential endpoints) |
+| `429` | rate limited by nginx (30 req/min on the credential endpoints, 60 req/s elsewhere) |
 | `500` | unexpected server error — details are logged, never returned |
 | `502` | the hospital's HIS was unreachable or returned garbage |
+| `503` | nginx could not reach the API at all |
 
 ### Full error-code list
 
@@ -52,8 +53,13 @@ exactly this shape. Clients branch on `code`, never on `message`.
 | `ROUTE_NOT_FOUND` | 404 | unknown path |
 | `METHOD_NOT_ALLOWED` | 405 | known path, wrong verb |
 | `USERNAME_TAKEN` | 409 | `/staff/create` |
+| `RATE_LIMITED` | 429 | all endpoints — emitted by nginx |
 | `INTERNAL_ERROR` | 500 | all endpoints |
 | `HIS_UNAVAILABLE` | 502 | `/patient/search` |
+| `SERVICE_UNAVAILABLE` | 503 | all endpoints — emitted by nginx when the API is down |
+
+The last two nginx-generated codes use the same envelope as the rest: a client
+that hits the rate limit never has to parse an HTML error page.
 
 ---
 

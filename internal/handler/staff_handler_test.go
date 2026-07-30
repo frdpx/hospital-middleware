@@ -105,6 +105,43 @@ func TestStaffCreate_Rejections(t *testing.T) {
 	}
 }
 
+// Validation messages must name the JSON field the client sent, not the Go
+// struct field — "Password" appears nowhere in our API spec.
+func TestStaffCreate_ValidationMessagesUseJSONFieldNames(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		body    map[string]string
+		wantMsg string
+	}{
+		{
+			name:    "missing field names the json key",
+			body:    map[string]string{"password": "P@ssw0rd123", "hospital": "hospital-a"},
+			wantMsg: "username is required",
+		},
+		{
+			name:    "min-length failure names the json key",
+			body:    map[string]string{"username": "jsmith", "password": "short", "hospital": "hospital-a"},
+			wantMsg: "password must be at least 8 characters",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := newTestServer(t)
+
+			recorder := server.do(t, http.MethodPost, "/staff/create", tc.body, "")
+
+			require.Equal(t, http.StatusBadRequest, recorder.Code)
+			body := decode[map[string]map[string]string](t, recorder)
+			assert.Equal(t, tc.wantMsg, body["error"]["message"])
+		})
+	}
+}
+
 func TestStaffCreate_DuplicateUsernameInSameHospital(t *testing.T) {
 	t.Parallel()
 

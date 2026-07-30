@@ -150,8 +150,9 @@ client ──► nginx ──► Go API ──► PostgreSQL
 ```
 
 - **nginx** terminates the client connection, rate-limits the credential
-  endpoints (10 req/min) and the rest of the API (60 req/s), and propagates
-  `X-Request-ID`.
+  endpoints (30 req/min) and the rest of the API (60 req/s), propagates
+  `X-Request-ID`, and renders its own 429/503 in the same JSON envelope the API
+  uses.
 - **The Go API** owns authentication, the hospital scope, and normalization of
   each HIS's payload into one internal patient model.
 - **PostgreSQL** stores the canonical person (`patients`) separately from each

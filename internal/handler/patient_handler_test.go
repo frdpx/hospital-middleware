@@ -163,6 +163,8 @@ func TestPatientSearch_ValidationErrors(t *testing.T) {
 
 			assert.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
 			assert.Equal(t, apierr.CodeValidation, errorCode(t, recorder))
+			assert.NotContains(t, recorder.Body.String(), "DateOfBirth",
+				"messages must name the JSON field, not the Go struct field")
 		})
 	}
 }

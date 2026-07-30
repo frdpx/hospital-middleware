@@ -28,6 +28,8 @@ type RouterDeps struct {
 
 // NewRouter builds the Gin engine with all routes and middleware.
 func NewRouter(deps RouterDeps) *gin.Engine {
+	useJSONFieldNames()
+
 	if deps.Debug {
 		gin.SetMode(gin.DebugMode)
 	} else {
