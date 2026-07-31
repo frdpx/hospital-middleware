@@ -15,3 +15,7 @@ coverage.html
 .DS_Store
 .idea/
 .vscode/
+
+# Generated from docs/planning-document.md — see the Makefile `docs` target
+docs/*.docx
+docs/*.html
