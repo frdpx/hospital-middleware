@@ -54,7 +54,7 @@ logs: ## Tail all service logs
 ps: ## Show stack status
 	docker compose ps
 
-docs: ## Regenerate the Google-Docs-ready .docx and .html from the planning document
+docs: ## Regenerate the Google-Docs-ready .docx and .html (English + Thai)
 	cd docs && pandoc planning-document.md \
 	  -o "Hospital Middleware - Development Planning Document.docx" \
 	  --from=gfm --resource-path=. --toc --toc-depth=2 \
@@ -63,3 +63,12 @@ docs: ## Regenerate the Google-Docs-ready .docx and .html from the planning docu
 	  -o "Hospital Middleware - Development Planning Document.html" \
 	  --from=gfm --standalone --embed-resources --toc --toc-depth=2 \
 	  --metadata title="Hospital Middleware — Development Planning Document"
+	cd docs && pandoc planning-document.th.md \
+	  -o "Hospital Middleware - เอกสารวางแผนการพัฒนา.docx" \
+	  --from=gfm --resource-path=. --reference-doc=reference-th.docx \
+	  --toc --toc-depth=2 \
+	  --metadata title="Hospital Middleware — เอกสารวางแผนการพัฒนา"
+	cd docs && pandoc planning-document.th.md \
+	  -o "Hospital Middleware - เอกสารวางแผนการพัฒนา.html" \
+	  --from=gfm --standalone --embed-resources --toc --toc-depth=2 \
+	  --metadata title="Hospital Middleware — เอกสารวางแผนการพัฒนา"

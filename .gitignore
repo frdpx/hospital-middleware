@@ -19,3 +19,6 @@ coverage.html
 # Generated from docs/planning-document.md — see the Makefile `docs` target
 docs/*.docx
 docs/*.html
+
+# Word lock files
+~$*
