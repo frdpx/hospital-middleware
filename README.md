@@ -135,17 +135,12 @@ make logs / ps     tail logs / show status
 | `/healthz` | GET | — | liveness |
 | `/readyz` | GET | — | readiness (checks the database) |
 
-Full request/response and error documentation: **[docs/api-spec.md](docs/api-spec.md)**
-
 ## Documentation
 
-| | |
-|---|---|
-| **[docs/planning-document.md](docs/planning-document.md)** | **the single planning document: project structure, API spec and ER diagram in one place** |
-| [docs/api-spec.md](docs/api-spec.md) | every endpoint, field, error code and example |
-| [docs/er-diagram.md](docs/er-diagram.md) | schema, Mermaid ER diagram, and why it is shaped that way |
-| [docs/structure.md](docs/structure.md) | project layout, dependency rules, testing strategy |
-| [docs/adr/](docs/adr/) | the seven decisions worth arguing about, and their trade-offs |
+The development planning documentation — **project structure, full API spec
+(every field, error code and example) and the ER diagram** — is delivered
+separately as a Google Doc, together with the architecture decision records
+behind the design choices summarised below.
 
 ## How the pieces fit
 
@@ -162,24 +157,21 @@ client ──► nginx ──► Go API ──► PostgreSQL
 - **The Go API** owns authentication, the hospital scope, and normalization of
   each HIS's payload into one internal patient model.
 - **PostgreSQL** stores the canonical person (`patients`) separately from each
-  hospital's registration of them (`hospital_patients`) — see
-  [ADR-0002](docs/adr/0002-split-patients-from-hospital-patients.md).
+  hospital's registration of them (`hospital_patients`), so one human is one
+  record however many hospitals know them.
 
 ### Design decisions in one line each
 
 - **The hospital scope is a signed JWT claim**, not a request field, so a client
-  cannot widen it. ([ADR-0004](docs/adr/0004-hospital-scope-lives-in-the-jwt.md))
+  cannot widen it.
 - **Every patient query starts from `hospital_patients`**, so another
   hospital's data is unreachable rather than merely un-selected.
 - **Adding Hospital B** means one new `HISClient` implementation and one row —
   no schema change, no service-layer change.
 - **Search is local-first**; the HIS is consulted only for `national_id` /
   `passport_id` lookups, because that is the only lookup it exposes.
-  ([ADR-0007](docs/adr/0007-his-fallback-only-for-identifier-searches.md))
 - **`/patient/search` is POST** so national ids never land in access logs.
-  ([ADR-0006](docs/adr/0006-post-for-patient-search.md))
 - **Migrations are embedded in the binary** and applied on startup.
-  ([ADR-0005](docs/adr/0005-embedded-migrations-on-startup.md))
 
 ## Security notes
 
@@ -204,10 +196,11 @@ client ──► nginx ──► Go API ──► PostgreSQL
   meant to sit behind a load balancer or ingress that terminates TLS. Exposing
   port 80 directly to a network you do not control would put JWTs and patient
   data on the wire in clear text.
-- **`/staff/create` is unauthenticated** so the assignment is demonstrable end
-  to end. This is the one deliberate deviation from what production should do,
-  and it is argued explicitly in
-  [ADR-0003](docs/adr/0003-staff-create-is-unauthenticated.md).
+- **`/staff/create` is unauthenticated** so the service is demonstrable end to
+  end from a clean database. This is the one deliberate deviation from what
+  production should do; in production it would require an admin token or move
+  to an internal admin surface. The reasoning is written up in the planning
+  document.
 
 ## Known limitations
 

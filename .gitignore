@@ -16,9 +16,8 @@ coverage.html
 .idea/
 .vscode/
 
-# Generated from docs/planning-document.md — see the Makefile `docs` target
-docs/*.docx
-docs/*.html
-
 # Word lock files
 ~$*
+
+# Planning documentation is delivered as a Google Doc, not through the repo
+docs/
