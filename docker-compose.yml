@@ -1,13 +1,3 @@
-# Three required services — nginx, the Go API and Postgres — plus an optional
-# `dev`-profile mock of the Hospital A HIS, because the real
-# https://hospital-a.api.co.th is not reachable from a development machine.
-#
-#   docker compose --profile dev up -d --build   # recommended: full demo
-#   docker compose up -d --build                 # the three required services
-#
-# Every service waits for its dependency to report *healthy*, not merely
-# started, so the stack comes up in a usable order on a cold machine.
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -19,7 +9,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      # Exposed on localhost only, for psql access during development.
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hospital} -d ${POSTGRES_DB:-hospital_middleware}"]
@@ -53,8 +42,6 @@ services:
       JWT_TTL: ${JWT_TTL:-1h}
 
       HIS_TIMEOUT: ${HIS_TIMEOUT:-5s}
-      # Empty by default => each hospital's own his_base_url is used. Set to
-      # http://mockhis:9090 (see .env.example) to exercise the mock HIS.
       HIS_BASE_URL_OVERRIDE: ${HIS_BASE_URL_OVERRIDE:-}
     depends_on:
       postgres:
@@ -88,8 +75,6 @@ services:
       start_period: 10s
     networks: [hospital_net]
 
-  # Stand-in for the Hospital A HIS. Only started with `--profile dev`, and
-  # built from its own image target so it never ships inside the API image.
   mockhis:
     profiles: ["dev"]
     build:

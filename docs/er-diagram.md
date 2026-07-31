@@ -156,6 +156,30 @@ cannot express.
 | `ix_hospital_patients_patient_id` | reverse lookup: which hospitals know this person |
 | `ix_patients_*` on `lower(name)`, dob, phone, `lower(email)` | back the search filters |
 
+## Rolling migrations back
+
+`staff.hospital_id` and `hospital_patients.hospital_id` both reference
+`hospitals` with `ON DELETE CASCADE`. That is correct for the forward
+direction — deleting a hospital should not leave orphaned staff — but it makes
+the *seed* migration's rollback dangerous: an unconditional
+`DELETE FROM hospitals` in `000002_seed_hospitals.down.sql` would take every
+staff account and every patient link with it.
+
+The down migration is therefore deliberately narrow: it removes a seeded
+hospital only when nothing references it.
+
+```sql
+DELETE FROM hospitals h
+WHERE h.code IN ('hospital-a', 'hospital-b')
+  AND NOT EXISTS (SELECT 1 FROM staff s WHERE s.hospital_id = h.id)
+  AND NOT EXISTS (SELECT 1 FROM hospital_patients hp WHERE hp.hospital_id = h.id);
+```
+
+**If you edit that file, keep the guards.** Rolling back a seed must not
+destroy the data that accumulated on top of it. CI runs `up → down → up`
+against a real Postgres, which is the only check that the `.down.sql` files
+execute at all.
+
 ## Known limitations
 
 - **Name search uses `ILIKE '%term%'`,** which cannot use the `lower(...)`
