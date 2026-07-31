@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/bambam/hospital-middleware/internal/models"
+	"github.com/frdpx/hospital-middleware/internal/models"
 )
 
 var ErrPatientNotFound = errors.New("hisclient: patient not found")

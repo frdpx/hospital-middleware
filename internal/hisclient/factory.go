@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bambam/hospital-middleware/internal/models"
+	"github.com/frdpx/hospital-middleware/internal/models"
 )
 
 type DefaultFactory struct {

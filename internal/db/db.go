@@ -7,7 +7,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/bambam/hospital-middleware/internal/config"
+	"github.com/frdpx/hospital-middleware/internal/config"
 )
 
 func Connect(ctx context.Context, cfg config.DBConfig) (*sql.DB, error) {

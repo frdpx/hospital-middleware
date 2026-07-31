@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bambam/hospital-middleware/internal/apierr"
+	"github.com/frdpx/hospital-middleware/internal/apierr"
 )
 
 func TestStaffCreate_Success(t *testing.T) {

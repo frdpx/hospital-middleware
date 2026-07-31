@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/bambam/hospital-middleware/internal/apierr"
-	"github.com/bambam/hospital-middleware/internal/models"
+	"github.com/frdpx/hospital-middleware/internal/apierr"
+	"github.com/frdpx/hospital-middleware/internal/models"
 )
 
 const hospitalColumns = `id, code, name, his_adapter_type, his_base_url, created_at, updated_at`

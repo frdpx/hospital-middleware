@@ -1,4 +1,4 @@
-module github.com/bambam/hospital-middleware
+module github.com/frdpx/hospital-middleware
 
 go 1.25.0
 

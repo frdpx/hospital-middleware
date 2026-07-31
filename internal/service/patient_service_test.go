@@ -11,11 +11,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bambam/hospital-middleware/internal/apierr"
-	"github.com/bambam/hospital-middleware/internal/hisclient"
-	"github.com/bambam/hospital-middleware/internal/models"
-	"github.com/bambam/hospital-middleware/internal/service"
-	"github.com/bambam/hospital-middleware/internal/testutil"
+	"github.com/frdpx/hospital-middleware/internal/apierr"
+	"github.com/frdpx/hospital-middleware/internal/hisclient"
+	"github.com/frdpx/hospital-middleware/internal/models"
+	"github.com/frdpx/hospital-middleware/internal/service"
+	"github.com/frdpx/hospital-middleware/internal/testutil"
 )
 
 func discardLogger() *slog.Logger {

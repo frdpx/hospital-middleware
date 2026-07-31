@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/bambam/hospital-middleware/internal/apierr"
-	"github.com/bambam/hospital-middleware/internal/auth"
+	"github.com/frdpx/hospital-middleware/internal/apierr"
+	"github.com/frdpx/hospital-middleware/internal/auth"
 )
 
 const contextKeyClaims = "auth.claims"

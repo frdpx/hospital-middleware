@@ -7,8 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/bambam/hospital-middleware/internal/auth"
-	"github.com/bambam/hospital-middleware/internal/middleware"
+	"github.com/frdpx/hospital-middleware/internal/auth"
+	"github.com/frdpx/hospital-middleware/internal/middleware"
 )
 
 type RouterDeps struct {

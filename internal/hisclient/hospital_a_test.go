@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bambam/hospital-middleware/internal/hisclient"
-	"github.com/bambam/hospital-middleware/internal/hisclient/mockhis"
-	"github.com/bambam/hospital-middleware/internal/models"
+	"github.com/frdpx/hospital-middleware/internal/hisclient"
+	"github.com/frdpx/hospital-middleware/internal/hisclient/mockhis"
+	"github.com/frdpx/hospital-middleware/internal/models"
 )
 
 func newMockHIS(t *testing.T, patients ...mockhis.Patient) *hisclient.HospitalAClient {

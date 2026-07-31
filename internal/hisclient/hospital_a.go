@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bambam/hospital-middleware/internal/models"
+	"github.com/frdpx/hospital-middleware/internal/models"
 )
 
 const maxHISResponseBytes = 1 << 20

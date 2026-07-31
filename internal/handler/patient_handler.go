@@ -7,10 +7,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/bambam/hospital-middleware/internal/apierr"
-	"github.com/bambam/hospital-middleware/internal/middleware"
-	"github.com/bambam/hospital-middleware/internal/models"
-	"github.com/bambam/hospital-middleware/internal/service"
+	"github.com/frdpx/hospital-middleware/internal/apierr"
+	"github.com/frdpx/hospital-middleware/internal/middleware"
+	"github.com/frdpx/hospital-middleware/internal/models"
+	"github.com/frdpx/hospital-middleware/internal/service"
 )
 
 type PatientHandler struct {

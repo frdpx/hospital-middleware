@@ -11,13 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bambam/hospital-middleware/internal/auth"
-	"github.com/bambam/hospital-middleware/internal/config"
-	"github.com/bambam/hospital-middleware/internal/db"
-	"github.com/bambam/hospital-middleware/internal/handler"
-	"github.com/bambam/hospital-middleware/internal/hisclient"
-	"github.com/bambam/hospital-middleware/internal/repository"
-	"github.com/bambam/hospital-middleware/internal/service"
+	"github.com/frdpx/hospital-middleware/internal/auth"
+	"github.com/frdpx/hospital-middleware/internal/config"
+	"github.com/frdpx/hospital-middleware/internal/db"
+	"github.com/frdpx/hospital-middleware/internal/handler"
+	"github.com/frdpx/hospital-middleware/internal/hisclient"
+	"github.com/frdpx/hospital-middleware/internal/repository"
+	"github.com/frdpx/hospital-middleware/internal/service"
 )
 
 const (

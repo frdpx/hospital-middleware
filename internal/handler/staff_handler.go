@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/bambam/hospital-middleware/internal/service"
+	"github.com/frdpx/hospital-middleware/internal/service"
 )
 
 type StaffHandler struct {

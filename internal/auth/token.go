@@ -8,8 +8,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	"github.com/bambam/hospital-middleware/internal/config"
-	"github.com/bambam/hospital-middleware/internal/models"
+	"github.com/frdpx/hospital-middleware/internal/config"
+	"github.com/frdpx/hospital-middleware/internal/models"
 )
 
 var ErrInvalidToken = errors.New("auth: invalid token")

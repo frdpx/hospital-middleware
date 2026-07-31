@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/bambam/hospital-middleware/internal/config"
-	"github.com/bambam/hospital-middleware/internal/db"
+	"github.com/frdpx/hospital-middleware/internal/config"
+	"github.com/frdpx/hospital-middleware/internal/db"
 )
 
 func main() {

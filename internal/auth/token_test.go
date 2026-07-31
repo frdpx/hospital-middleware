@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bambam/hospital-middleware/internal/auth"
-	"github.com/bambam/hospital-middleware/internal/config"
-	"github.com/bambam/hospital-middleware/internal/models"
+	"github.com/frdpx/hospital-middleware/internal/auth"
+	"github.com/frdpx/hospital-middleware/internal/config"
+	"github.com/frdpx/hospital-middleware/internal/models"
 )
 
 const testSecret = "test-secret-that-is-long-enough-32b"

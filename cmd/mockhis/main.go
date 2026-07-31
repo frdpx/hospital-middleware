@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/bambam/hospital-middleware/internal/hisclient/mockhis"
+	"github.com/frdpx/hospital-middleware/internal/hisclient/mockhis"
 )
 
 func main() {

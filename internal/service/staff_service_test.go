@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/bambam/hospital-middleware/internal/apierr"
-	"github.com/bambam/hospital-middleware/internal/auth"
-	"github.com/bambam/hospital-middleware/internal/config"
-	"github.com/bambam/hospital-middleware/internal/models"
-	"github.com/bambam/hospital-middleware/internal/service"
-	"github.com/bambam/hospital-middleware/internal/testutil"
+	"github.com/frdpx/hospital-middleware/internal/apierr"
+	"github.com/frdpx/hospital-middleware/internal/auth"
+	"github.com/frdpx/hospital-middleware/internal/config"
+	"github.com/frdpx/hospital-middleware/internal/models"
+	"github.com/frdpx/hospital-middleware/internal/service"
+	"github.com/frdpx/hospital-middleware/internal/testutil"
 )
 
 var (

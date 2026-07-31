@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/bambam/hospital-middleware/internal/config"
+	"github.com/frdpx/hospital-middleware/internal/config"
 )
 
 func validEnv() map[string]string {

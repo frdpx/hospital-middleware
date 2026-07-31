@@ -12,7 +12,7 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 
-	"github.com/bambam/hospital-middleware/internal/apierr"
+	"github.com/frdpx/hospital-middleware/internal/apierr"
 )
 
 var registerFieldNames sync.Once
