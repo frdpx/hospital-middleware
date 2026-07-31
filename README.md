@@ -141,6 +141,7 @@ Full request/response and error documentation: **[docs/api-spec.md](docs/api-spe
 
 | | |
 |---|---|
+| **[docs/planning-document.md](docs/planning-document.md)** | **the single planning document: project structure, API spec and ER diagram in one place** |
 | [docs/api-spec.md](docs/api-spec.md) | every endpoint, field, error code and example |
 | [docs/er-diagram.md](docs/er-diagram.md) | schema, Mermaid ER diagram, and why it is shaped that way |
 | [docs/structure.md](docs/structure.md) | project layout, dependency rules, testing strategy |

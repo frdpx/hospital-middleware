@@ -1,5 +1,11 @@
 # ER Diagram — Hospital Middleware
 
+Rendered image: [`assets/er-diagram.png`](assets/er-diagram.png) ·
+vector: [`assets/er-diagram.svg`](assets/er-diagram.svg) ·
+source: [`assets/er-diagram.mmd`](assets/er-diagram.mmd)
+
+![ER diagram](assets/er-diagram.png)
+
 ## Diagram
 
 ```mermaid
